@@ -41,8 +41,9 @@ def run_health_server():
 (
     MAIN_MENU, CHECKOUT_NAME, CHECKOUT_PHONE, CHECKOUT_ADDRESS,
     CHECKOUT_SHIPPING, UPLOAD_RECEIPT, ADMIN_NEW_PRICE,
-    ADMIN_ADD_PRODUCT_NAME, ADMIN_ADD_PRODUCT_PRICE, ADMIN_ADD_PRODUCT_UNIT
-) = range(10)
+    ADMIN_ADD_PRODUCT_CAT, ADMIN_ADD_PRODUCT_NAME,
+    ADMIN_ADD_PRODUCT_PRICE, ADMIN_ADD_PRODUCT_UNIT
+) = range(11)
 
 # ============ دیتابیس ============
 def load_data():
@@ -51,29 +52,160 @@ def load_data():
             return json.load(f)
     else:
         default_data = {
-            "products": {
-                "زردچوبه": {"price": 150000, "unit": "کیلویی", "available": True},
-                "دارچین": {"price": 200000, "unit": "کیلویی", "available": True},
-                "زعفران": {"price": 850000, "unit": "مثقالی", "available": True},
-                "فلفل سیاه": {"price": 180000, "unit": "کیلویی", "available": True},
-                "زنجبیل": {"price": 120000, "unit": "کیلویی", "available": True},
-                "هل سبز": {"price": 950000, "unit": "کیلویی", "available": True},
-                "پودر کاری": {"price": 160000, "unit": "کیلویی", "available": True},
-                "سماق": {"price": 130000, "unit": "کیلویی", "available": True},
-                "آویشن": {"price": 110000, "unit": "کیلویی", "available": True},
-                "رازیانه": {"price": 95000, "unit": "کیلویی", "available": True},
-                "میخک": {"price": 380000, "unit": "کیلویی", "available": True},
-                "جوز هندی": {"price": 420000, "unit": "کیلویی", "available": True},
+            "categories": {
+                "چاشنی های گهنیج": {
+                    "پودر لیمو عمانی (نمکپاشی)": {"price": 110000, "unit": "نمکپاشی", "available": True},
+                    "چاشنی ماست (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
+                    "چاشنی ماست (نیم کیلویی)": {"price": 475000, "unit": "نیم کیلویی", "available": True},
+                    "ادویه سوسیس بندری (قوطی مربعی)": {"price": 200000, "unit": "قوطی مربعی", "available": True},
+                    "ادویه سوسیس بندری (نیم کیلویی)": {"price": 590000, "unit": "نیم کیلویی", "available": True},
+                    "چاشنی زعتر (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                    "چاشنی زعتر (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
+                    "چاشنی املت (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
+                    "چاشنی املت (نیم کیلویی)": {"price": 300000, "unit": "نیم کیلویی", "available": True},
+                    "چاشنی سیب زمینی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                    "چاشنی سیب زمینی (نیم کیلویی)": {"price": 460000, "unit": "نیم کیلویی", "available": True},
+                    "ایتالیایی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                    "ایتالیایی (نیم کیلویی)": {"price": 555000, "unit": "نیم کیلویی", "available": True},
+                    "ادویه ماکارونی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                    "ادویه ماکارونی (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
+                    "فلفل سیاه (نمکپاشی)": {"price": 220000, "unit": "نمکپاشی", "available": True},
+                    "فلفل سیاه (نیم کیلویی)": {"price": 950000, "unit": "نیم کیلویی", "available": True},
+                    "فلفل سیاه (نکوبیده قوطی 150گ)": {"price": 300000, "unit": "قوطی 150 گرم", "available": True},
+                    "دارچین (نمکپاشی)": {"price": 100000, "unit": "نمکپاشی", "available": True},
+                    "دارچین (نیم کیلویی)": {"price": 395000, "unit": "نیم کیلویی", "available": True},
+                    "دارچین (سالم 150 گ)": {"price": 150000, "unit": "قوطی 150 گرم سالم", "available": True},
+                    "پودر فلفل قرمز تند چیلی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                    "پودر فلفل قرمز تند چیلی (نیم کیلویی)": {"price": 640000, "unit": "نیم کیلویی", "available": True},
+                },
+                "ادویه جات ترکیبی گهنیج": {
+                    "ادویه مامان بلوچی (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه مامان بلوچی (پاکت نیم کیلویی)": {"price": 600000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه بریانی بلوچی (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه بریانی بلوچی (پاکت نیم کیلویی)": {"price": 435000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه عربی مخصوص (قوطی مربعی 130گ)": {"price": 370000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه عربی مخصوص (پاکت نیم کیلویی)": {"price": 1245000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه کاری مخصوص (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه کاری مخصوص (پاکت نیم کیلویی)": {"price": 480000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه ماهی و میگو (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه ماهی و میگو (پاکت نیم کیلویی)": {"price": 570000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه کباب (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه کباب (پاکت نیم کیلویی)": {"price": 470000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه کرایی بلوچی (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه کرایی بلوچی (پاکت نیم کیلویی)": {"price": 610000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه کاچی (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه کاچی (پاکت نیم کیلویی)": {"price": 500000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه کاجون (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه کاجون (پاکت نیم کیلویی)": {"price": 480000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه مرغ (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه مرغ (نیم کیلویی پاکت)": {"price": 500000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه سمبوسه (قوطی مربعی 130گ)": {"price": 220000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه سمبوسه (پاکت نیم کیلویی)": {"price": 660000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه گراماسالا (قوطی مربعی 130گ)": {"price": 320000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه گراماسالا (پاکت نیم کیلویی)": {"price": 1035000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "ادویه فلافل (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                    "ادویه پکوره (قوطی مربعی 130گ)": {"price": 120000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                },
+                "ادویه جات اصلی": {
+                    "پودر پاپریکا (قوطی مربعی)": {"price": 150000, "unit": "قوطی مربعی", "available": True},
+                    "پودر پاپریکا (پاکت نیم کیلویی)": {"price": 360000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "پودر سیر خالص (قوطی 180 گ)": {"price": 220000, "unit": "قوطی 180 گرم", "available": True},
+                    "پودر سیر خالص (پاکت نیم کیلویی)": {"price": 500000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "زیره سبز (قوطی مربعی)": {"price": 130000, "unit": "قوطی مربعی", "available": True},
+                    "زیره سبز (پاکت نیم کیلویی)": {"price": 360000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "زیره سیاه (قوطی مربعی)": {"price": 410000, "unit": "قوطی مربعی", "available": True},
+                    "زیره سیاه (پاکت نیم کیلویی)": {"price": 1330000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "زنجبیل (قوطی مربعی)": {"price": 140000, "unit": "قوطی مربعی", "available": True},
+                    "زنجبیل (پاکت نیم کیلویی)": {"price": 480000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "پودر گشنیز (قوطی مربعی)": {"price": 100000, "unit": "قوطی مربعی", "available": True},
+                    "پودر گشنیز (پاکت نیم کیلویی)": {"price": 280000, "unit": "پاکت نیم کیلویی", "available": True},
+                    "تخم گشنیز (قوطی مربعی)": {"price": 80000, "unit": "قوطی مربعی", "available": True},
+                    "تخم گشنیز (پاکت نیم کیلویی)": {"price": 280000, "unit": "پاکت نیم کیلویی", "available": True},
+                },
+                "دانه ها و تخم ها": {
+                    "دانه چیا (200 گرمی)": {"price": 190000, "unit": "قوطی 200 گرم", "available": True},
+                    "خاکشیر (200 گرمی)": {"price": 120000, "unit": "قوطی 200 گرم", "available": True},
+                    "تخم شربتی ریز": {"price": 180000, "unit": "قوطی", "available": True},
+                    "تخم شربتی درشت": {"price": 140000, "unit": "قوطی", "available": True},
+                    "سیاهدانه": {"price": 200000, "unit": "قوطی", "available": True},
+                    "بارهنگ": {"price": 160000, "unit": "قوطی", "available": True},
+                    "پاپ کورن بزرگ (800 گ)": {"price": 330000, "unit": "قوطی 800 گرم", "available": True},
+                    "اسپند": {"price": 80000, "unit": "قوطی", "available": True},
+                    "تخم زنیان": {"price": 120000, "unit": "قوطی", "available": True},
+                },
+                "طعم دهنده ها": {
+                    "آروماتز": {"price": 170000, "unit": "قوطی", "available": True},
+                    "سیر و کره": {"price": 150000, "unit": "قوطی", "available": True},
+                    "دود": {"price": 120000, "unit": "قوطی", "available": True},
+                    "قارچ و خامه": {"price": 180000, "unit": "قوطی", "available": True},
+                    "کره": {"price": 100000, "unit": "قوطی", "available": True},
+                    "لیمو فلفلی زرد": {"price": 150000, "unit": "قوطی", "available": True},
+                    "لیمو فلفلی چاشنی": {"price": 190000, "unit": "قوطی", "available": True},
+                    "پنیر چدار": {"price": 120000, "unit": "قوطی", "available": True},
+                    "پیاز جعفری": {"price": 150000, "unit": "قوطی", "available": True},
+                    "کچاپ": {"price": 150000, "unit": "قوطی", "available": True},
+                    "سماق": {"price": 200000, "unit": "قوطی", "available": True},
+                    "ادویه انبه": {"price": 150000, "unit": "قوطی", "available": True},
+                    "پودر آویشن": {"price": 200000, "unit": "قوطی", "available": True},
+                    "ادویه برگر": {"price": 150000, "unit": "قوطی", "available": True},
+                    "پودر لیمو": {"price": 110000, "unit": "قوطی", "available": True},
+                    "پودر لبو": {"price": 120000, "unit": "قوطی", "available": True},
+                    "عصاره مرغ": {"price": 120000, "unit": "قوطی", "available": True},
+                },
+                "سبزی خشک و متفرقه": {
+                    "فلفل لاهوری (کناری)": {"price": 200000, "unit": "بسته", "available": True},
+                    "نعناع خشک بزرگ": {"price": 220000, "unit": "بسته بزرگ", "available": True},
+                    "نعناع خشک متوسط": {"price": 160000, "unit": "بسته متوسط", "available": True},
+                    "شوید خشک بزرگ": {"price": 220000, "unit": "بسته بزرگ", "available": True},
+                    "شنبلیله خشک": {"price": 230000, "unit": "بسته", "available": True},
+                    "ترخون خشک": {"price": 260000, "unit": "بسته", "available": True},
+                    "رزماری خشک قوطی": {"price": 70000, "unit": "قوطی", "available": True},
+                    "برگ بو (40 گرم)": {"price": 100000, "unit": "بسته 40 گرم", "available": True},
+                    "هل اکبر بنفش (20 گرمی)": {"price": 270000, "unit": "بسته 20 گرم", "available": True},
+                    "نمک صورتی یک کیلو": {"price": 150000, "unit": "یک کیلو", "available": True},
+                    "پرک لیمو کوچک": {"price": 200000, "unit": "بسته کوچک", "available": True},
+                    "پرک لیمو بزرگ": {"price": 500000, "unit": "بسته بزرگ", "available": True},
+                    "رب انار ترش": {"price": 450000, "unit": "بسته", "available": True},
+                    "رب انار ترش متوسط": {"price": 420000, "unit": "بسته متوسط", "available": True},
+                    "آبغوره خالص": {"price": 250000, "unit": "بسته", "available": True},
+                    "غنچه گل محمدی": {"price": 300000, "unit": "بسته", "available": True},
+                    "گلرنگ (زردی) بسته 80 گ": {"price": 250000, "unit": "بسته 80 گرم", "available": True},
+                    "رب گوجه خالص خونگی 1100 گرم": {"price": 420000, "unit": "بسته 1100 گرم", "available": True},
+                },
+                "عرقیجات خالص": {
+                    "گلاب ویژه": {"price": 290000, "unit": "بطری", "available": True},
+                    "عرق نسترن": {"price": 190000, "unit": "بطری", "available": True},
+                    "عرق بهار نارنج": {"price": 220000, "unit": "بطری", "available": True},
+                    "عرق چهل گیاه": {"price": 200000, "unit": "بطری", "available": True},
+                    "عرق زنیان": {"price": 150000, "unit": "بطری", "available": True},
+                    "عرق بید مشک": {"price": 190000, "unit": "بطری", "available": True},
+                    "عرق آویشن": {"price": 150000, "unit": "بطری", "available": True},
+                    "عرق شاتره": {"price": 150000, "unit": "بطری", "available": True},
+                    "عرق رازیانه": {"price": 150000, "unit": "بطری", "available": True},
+                    "عرق شوید": {"price": 150000, "unit": "بطری", "available": True},
+                    "عرق خار مریم": {"price": 150000, "unit": "بطری", "available": True},
+                    "عرق خار شتر": {"price": 150000, "unit": "بطری", "available": True},
+                    "عرق زیره": {"price": 150000, "unit": "بطری", "available": True},
+                    "عرق کاسنی": {"price": 150000, "unit": "بطری", "available": True},
+                    "عرق طارونه": {"price": 150000, "unit": "بطری", "available": True},
+                    "معجون آرامش بخش": {"price": 270000, "unit": "بطری", "available": True},
+                    "معجون معده": {"price": 270000, "unit": "بطری", "available": True},
+                    "عرق نعناع": {"price": 220000, "unit": "بطری", "available": True},
+                },
+                "زردچوبه چارمنار": {
+                    "زردچوبه چارمنار (نیم کیلو)": {"price": 470000, "unit": "نیم کیلو", "available": True},
+                    "زردچوبه چارمنار (150 گرمی)": {"price": 180000, "unit": "150 گرمی", "available": True},
+                },
             },
             "orders": [],
             "shipping_options": {
                 "پست پیشتاز": 45000,
                 "پست سفارشی": 30000,
                 "تیپاکس": 65000,
-                "پیک (تهران)": 50000
+                "پیک ": 100000
             },
-            "card_number": "6037-XXXX-XXXX-XXXX",
-            "card_holder": "نام صاحب فروشگاه"
+            "card_number": "6219861941858903",
+            "card_holder": "فهیمه امینی"
         }
         save_data(default_data)
         return default_data
@@ -85,6 +217,21 @@ def save_data(data):
 def format_price(price):
     return f"{price:,} تومان"
 
+def get_all_products(data):
+    """همه محصولات رو از همه دسته ها برمیگردونه"""
+    all_products = {}
+    for cat_name, products in data.get("categories", {}).items():
+        for prod_name, prod_info in products.items():
+            all_products[prod_name] = {**prod_info, "category": cat_name}
+    return all_products
+
+def find_product(data, product_name):
+    """یه محصول رو در دسته ها پیدا میکنه"""
+    for cat_name, products in data.get("categories", {}).items():
+        if product_name in products:
+            return products[product_name], cat_name
+    return None, None
+
 # ============ شروع ============
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -93,7 +240,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     welcome_text = (
         f"🌿 سلام {user.first_name} عزیز!\n\n"
-        f"به فروشگاه ادویه جات خوش آمدید\n\n"
+        f"به فروشگاه ادویه جات گهنیج خوش آمدید 🌶\n\n"
         f"از منوی زیر انتخاب کنید:"
     )
 
@@ -115,26 +262,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ============ محصولات ============
+# ============ نمایش دسته بندی ها ============
 async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     data = load_data()
-    products = data["products"]
+    categories = data.get("categories", {})
 
-    text = "🌿 لیست محصولات موجود:\n\n"
+    text = "🌿 دسته بندی محصولات:\n\nلطفا یک دسته را انتخاب کنید:"
     keyboard = []
 
-    for name, info in products.items():
-        if info["available"]:
-            text += f"▫️ {name} - {format_price(info['price'])} ({info['unit']})\n"
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"🌶 {name} | {format_price(info['price'])}",
-                    callback_data=f"product_{name}"
-                )
-            ])
+    for cat_name in categories.keys():
+        product_count = len(categories[cat_name])
+        keyboard.append([
+            InlineKeyboardButton(
+                f"📂 {cat_name} ({product_count} محصول)",
+                callback_data=f"cat_{cat_name}"
+            )
+        ])
 
     keyboard.append([InlineKeyboardButton("🛍 سبد خرید", callback_data="cart")])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_main")])
@@ -143,24 +289,60 @@ async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
+# ============ نمایش محصولات یک دسته ============
+async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_name = query.data.replace("cat_", "")
+    data = load_data()
+    products = data.get("categories", {}).get(cat_name, {})
+
+    text = f"📂 {cat_name}\n\n"
+    keyboard = []
+
+    for name, info in products.items():
+        if info["available"]:
+            text += f"▫️ {name} - {format_price(info['price'])}\n"
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"🌶 {name}",
+                    callback_data=f"product_{name}"
+                )
+            ])
+
+    keyboard.append([InlineKeyboardButton("🛍 سبد خرید", callback_data="cart")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت به دسته ها", callback_data="browse")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # چون متن ممکنه طولانی باشه
+    if len(text) > 4000:
+        text = text[:3900] + "\n...\n(محصولات زیاد است، از دکمه ها انتخاب کنید)"
+
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+# ============ جزئیات محصول ============
 async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     product_name = query.data.replace("product_", "")
     data = load_data()
+    product, cat_name = find_product(data, product_name)
 
-    if product_name not in data["products"]:
+    if not product:
         await query.edit_message_text("❌ محصول پیدا نشد!")
         return MAIN_MENU
 
-    product = data["products"][product_name]
     context.user_data["selected_product"] = product_name
 
     text = (
         f"🌿 {product_name}\n\n"
+        f"📂 دسته: {cat_name}\n"
         f"💰 قیمت: {format_price(product['price'])}\n"
-        f"📦 واحد: {product['unit']}\n"
+        f"📦 نوع بسته: {product['unit']}\n"
         f"✅ موجود\n\n"
         f"تعداد مورد نظر را انتخاب کنید:"
     )
@@ -172,23 +354,24 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("3️⃣", callback_data="qty_3"),
         ],
         [
-            InlineKeyboardButton("۰.۵", callback_data="qty_0.5"),
-            InlineKeyboardButton("۱.۵", callback_data="qty_1.5"),
+            InlineKeyboardButton("4️⃣", callback_data="qty_4"),
             InlineKeyboardButton("5️⃣", callback_data="qty_5"),
+            InlineKeyboardButton("🔟", callback_data="qty_10"),
         ],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="browse")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data=f"cat_{cat_name}")],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
+# ============ اضافه به سبد ============
 async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     qty_str = query.data.replace("qty_", "")
-    qty = float(qty_str)
+    qty = int(qty_str)
     product_name = context.user_data.get("selected_product")
 
     if not product_name:
@@ -204,12 +387,13 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["cart"][product_name] = qty
 
     data = load_data()
-    product = data["products"][product_name]
+    product, _ = find_product(data, product_name)
     item_total = int(product["price"] * qty)
 
     text = (
-        f"✅ {product_name} به سبد خرید اضافه شد!\n\n"
-        f"📦 مقدار: {qty} {product['unit']}\n"
+        f"✅ به سبد خرید اضافه شد!\n\n"
+        f"🌶 {product_name}\n"
+        f"📦 تعداد: {qty}\n"
         f"💰 قیمت: {format_price(item_total)}\n"
     )
 
@@ -223,6 +407,7 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
+# ============ سبد خرید ============
 async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -243,12 +428,12 @@ async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = 0
 
     for product_name, qty in cart.items():
-        if product_name in data["products"]:
-            price = data["products"][product_name]["price"]
-            unit = data["products"][product_name]["unit"]
+        product, _ = find_product(data, product_name)
+        if product:
+            price = product["price"]
             item_total = int(price * qty)
             total += item_total
-            text += f"▫️ {product_name}: {qty} {unit} = {format_price(item_total)}\n"
+            text += f"▫️ {product_name}\n   {qty} عدد × {format_price(price)} = {format_price(item_total)}\n\n"
 
     text += f"\n💰 جمع کل: {format_price(total)}"
 
@@ -260,6 +445,10 @@ async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if len(text) > 4000:
+        text = text[:3900] + "\n...(سبد بزرگ است)"
+
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
@@ -341,12 +530,12 @@ async def select_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     order_details = ""
 
     for product_name, qty in cart.items():
-        if product_name in data["products"]:
-            price = data["products"][product_name]["price"]
-            unit = data["products"][product_name]["unit"]
+        product, _ = find_product(data, product_name)
+        if product:
+            price = product["price"]
             item_total = int(price * qty)
             products_total += item_total
-            order_details += f"  ▫️ {product_name}: {qty} {unit} = {format_price(item_total)}\n"
+            order_details += f"  ▫️ {product_name}: {qty} عدد = {format_price(item_total)}\n"
 
     grand_total = products_total + shipping_cost
     context.user_data["grand_total"] = grand_total
@@ -372,6 +561,10 @@ async def select_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [[InlineKeyboardButton("❌ انصراف", callback_data="back_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if len(text) > 4000:
+        text = text[:3900] + "\n...(خلاصه)"
+
     await query.edit_message_text(text, reply_markup=reply_markup)
     return UPLOAD_RECEIPT
 
@@ -411,10 +604,10 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     order_text = ""
     for product_name, qty in cart.items():
-        if product_name in data["products"]:
-            price = data["products"][product_name]["price"]
-            unit = data["products"][product_name]["unit"]
-            order_text += f"  ▫️ {product_name}: {qty} {unit} = {format_price(int(price * qty))}\n"
+        product, _ = find_product(data, product_name)
+        if product:
+            price = product["price"]
+            order_text += f"  ▫️ {product_name}: {qty} عدد = {format_price(int(price * qty))}\n"
 
     admin_text = (
         f"🔔 سفارش جدید #{order['order_id']}\n\n"
@@ -429,7 +622,14 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     try:
-        await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text)
+        # اگه متن طولانی باشه، تیکه تیکه بفرست
+        if len(admin_text) > 4000:
+            chunks = [admin_text[i:i+4000] for i in range(0, len(admin_text), 4000)]
+            for chunk in chunks:
+                await context.bot.send_message(chat_id=ADMIN_ID, text=chunk)
+        else:
+            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text)
+        
         photo = update.message.photo[-1]
         await context.bot.send_photo(
             chat_id=ADMIN_ID,
@@ -448,9 +648,10 @@ async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         "📞 تماس با ما:\n\n"
-        "📱 تلفن: 09XXXXXXXXX\n"
-        "🏪 آدرس: تهران\n"
-        "⏰ ساعت کاری: ۹ صبح تا ۹ شب"
+        "📱 تلفن: 09158483757\n"
+        "🏪  آدرس: ایرانشهر بلوار شهید بهشتی\n"
+        "⏰ ساعت کاری: 10 الی 14 و 15:30 الی 21 \n\n"
+        "🌿 فروشگاه ادویه گهنیج"
     )
 
     keyboard = [[InlineKeyboardButton("🔙 بازگشت", callback_data="back_main")]]
@@ -461,17 +662,19 @@ async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("🔍 نام محصول مورد نظر خود را تایپ کنید:")
+    await query.edit_message_text("🔍 نام محصول مورد نظر خود را تایپ کنید:\n(مثلاً: زردچوبه یا زعتر)")
     context.user_data["searching"] = True
     return MAIN_MENU
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("searching"):
         context.user_data["searching"] = False
-        search_term = update.message.text
+        search_term = update.message.text.strip()
         data = load_data()
+        
+        all_products = get_all_products(data)
         results = {}
-        for name, info in data["products"].items():
+        for name, info in all_products.items():
             if search_term in name and info["available"]:
                 results[name] = info
 
@@ -482,16 +685,25 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 [InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_main")],
             ]
         else:
-            text = f"🔍 نتایج جستجو:\n\n"
+            text = f"🔍 نتایج جستجو برای «{search_term}»:\n\n"
             keyboard = []
+            count = 0
             for name, info in results.items():
+                if count >= 30:  # حداکثر 30 نتیجه
+                    text += f"\n(و {len(results) - 30} مورد دیگر...)"
+                    break
                 text += f"▫️ {name} - {format_price(info['price'])}\n"
                 keyboard.append([
                     InlineKeyboardButton(f"🌶 {name}", callback_data=f"product_{name}")
                 ])
+                count += 1
             keyboard.append([InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_main")])
 
         reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if len(text) > 4000:
+            text = text[:3900] + "\n...(نتایج زیاد است)"
+            
         await update.message.reply_text(text, reply_markup=reply_markup)
         return MAIN_MENU
 
@@ -504,7 +716,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ شما دسترسی ندارید!")
         return MAIN_MENU
 
-    text = "⚙️ پنل مدیریت فروشگاه\n\nیکی از گزینه ها را انتخاب کنید:"
+    text = "⚙️ پنل مدیریت فروشگاه گهنیج\n\nیکی از گزینه ها را انتخاب کنید:"
 
     keyboard = [
         [InlineKeyboardButton("💰 ویرایش قیمت ها", callback_data="admin_prices")],
@@ -524,20 +736,48 @@ async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = load_data()
-    text = "💰 ویرایش قیمت ها\n\nمحصول را انتخاب کنید:\n\n"
+    text = "💰 ویرایش قیمت ها\n\nابتدا دسته را انتخاب کنید:"
     keyboard = []
 
-    for name, info in data["products"].items():
-        text += f"▫️ {name}: {format_price(info['price'])}\n"
+    for cat_name in data.get("categories", {}).keys():
         keyboard.append([
             InlineKeyboardButton(
-                f"✏️ {name} | {format_price(info['price'])}",
-                callback_data=f"editprice_{name}"
+                f"📂 {cat_name}",
+                callback_data=f"adminprice_cat_{cat_name}"
             )
         ])
 
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
     reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_price_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_name = query.data.replace("adminprice_cat_", "")
+    data = load_data()
+    products = data.get("categories", {}).get(cat_name, {})
+
+    text = f"💰 ویرایش قیمت - {cat_name}\n\nمحصول را انتخاب کنید:\n\n"
+    keyboard = []
+
+    for name, info in products.items():
+        text += f"▫️ {name}: {format_price(info['price'])}\n"
+        keyboard.append([
+            InlineKeyboardButton(
+                f"✏️ {name}",
+                callback_data=f"editprice_{name}"
+            )
+        ])
+
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_prices")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if len(text) > 4000:
+        text = text[:3900] + "\n...(از دکمه ها استفاده کنید)"
+
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
@@ -549,35 +789,49 @@ async def admin_select_for_price(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["editing_product"] = product_name
 
     data = load_data()
-    current_price = data["products"][product_name]["price"]
+    product, _ = find_product(data, product_name)
+
+    if not product:
+        await query.edit_message_text("❌ محصول پیدا نشد!")
+        return MAIN_MENU
 
     await query.edit_message_text(
-        f"✏️ ویرایش قیمت {product_name}\n\n"
-        f"💰 قیمت فعلی: {format_price(current_price)}\n\n"
+        f"✏️ ویرایش قیمت\n\n"
+        f"🌶 {product_name}\n"
+        f"💰 قیمت فعلی: {format_price(product['price'])}\n\n"
         f"لطفا قیمت جدید را به تومان وارد کنید:\n(فقط عدد، مثلا: 150000)"
     )
     return ADMIN_NEW_PRICE
 
 async def save_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        new_price = int(update.message.text.replace(",", "").replace("،", ""))
+        new_price = int(update.message.text.replace(",", "").replace("،", "").strip())
     except ValueError:
         await update.message.reply_text("❌ لطفا فقط عدد وارد کنید!")
         return ADMIN_NEW_PRICE
 
     product_name = context.user_data.get("editing_product")
     data = load_data()
-
-    if product_name in data["products"]:
-        old_price = data["products"][product_name]["price"]
-        data["products"][product_name]["price"] = new_price
-        save_data(data)
-
-        await update.message.reply_text(
-            f"✅ قیمت {product_name} تغییر کرد!\n\n"
-            f"💰 قبلی: {format_price(old_price)}\n"
-            f"💰 جدید: {format_price(new_price)}"
-        )
+    
+    # پیدا کردن و آپدیت
+    updated = False
+    for cat_name, products in data.get("categories", {}).items():
+        if product_name in products:
+            old_price = products[product_name]["price"]
+            products[product_name]["price"] = new_price
+            save_data(data)
+            
+            await update.message.reply_text(
+                f"✅ قیمت با موفقیت تغییر کرد!\n\n"
+                f"🌶 {product_name}\n"
+                f"💰 قبلی: {format_price(old_price)}\n"
+                f"💰 جدید: {format_price(new_price)}"
+            )
+            updated = True
+            break
+    
+    if not updated:
+        await update.message.reply_text("❌ محصول پیدا نشد!")
 
     keyboard = [
         [InlineKeyboardButton("💰 ویرایش قیمت دیگر", callback_data="admin_prices")],
@@ -588,20 +842,48 @@ async def save_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
     return MAIN_MENU
 
+# ============ افزودن محصول ============
 async def admin_add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("➕ افزودن محصول جدید\n\nنام محصول را وارد کنید:")
+
+    data = load_data()
+    text = "➕ افزودن محصول جدید\n\nابتدا دسته را انتخاب کنید:"
+    keyboard = []
+
+    for cat_name in data.get("categories", {}).keys():
+        keyboard.append([
+            InlineKeyboardButton(f"📂 {cat_name}", callback_data=f"addcat_{cat_name}")
+        ])
+
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_select_cat_for_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_name = query.data.replace("addcat_", "")
+    context.user_data["adding_category"] = cat_name
+
+    await query.edit_message_text(
+        f"➕ افزودن محصول به دسته:\n📂 {cat_name}\n\n"
+        f"نام محصول را وارد کنید:"
+    )
     return ADMIN_ADD_PRODUCT_NAME
 
 async def get_product_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["new_product_name"] = update.message.text
-    await update.message.reply_text(f"✅ نام: {update.message.text}\n\nقیمت را به تومان وارد کنید:")
+    context.user_data["new_product_name"] = update.message.text.strip()
+    await update.message.reply_text(
+        f"✅ نام: {update.message.text}\n\nقیمت را به تومان وارد کنید:"
+    )
     return ADMIN_ADD_PRODUCT_PRICE
 
 async def get_product_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        price = int(update.message.text.replace(",", "").replace("،", ""))
+        price = int(update.message.text.replace(",", "").replace("،", "").strip())
         context.user_data["new_product_price"] = price
     except ValueError:
         await update.message.reply_text("❌ فقط عدد وارد کنید!")
@@ -609,43 +891,75 @@ async def get_product_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"✅ قیمت: {format_price(price)}\n\n"
-        f"واحد فروش را وارد کنید:\n(مثلا: کیلویی، مثقالی، بسته ای)"
+        f"نوع بسته را وارد کنید:\n(مثلا: نمکپاشی، نیم کیلویی، قوطی مربعی)"
     )
     return ADMIN_ADD_PRODUCT_UNIT
 
 async def get_product_unit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    unit = update.message.text
+    unit = update.message.text.strip()
     name = context.user_data["new_product_name"]
     price = context.user_data["new_product_price"]
+    cat_name = context.user_data.get("adding_category")
 
     data = load_data()
-    data["products"][name] = {"price": price, "unit": unit, "available": True}
+    if cat_name not in data.get("categories", {}):
+        data["categories"][cat_name] = {}
+    
+    data["categories"][cat_name][name] = {"price": price, "unit": unit, "available": True}
     save_data(data)
 
     await update.message.reply_text(
-        f"✅ محصول اضافه شد!\n\n🌶 {name}\n💰 {format_price(price)}\n📦 {unit}"
+        f"✅ محصول اضافه شد!\n\n"
+        f"📂 دسته: {cat_name}\n"
+        f"🌶 نام: {name}\n"
+        f"💰 قیمت: {format_price(price)}\n"
+        f"📦 بسته: {unit}"
     )
 
     keyboard = [
-        [InlineKeyboardButton("➕ محصول دیگر", callback_data="admin_add")],
+        [InlineKeyboardButton("➕ افزودن دیگر", callback_data="admin_add")],
         [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
     return MAIN_MENU
 
+# ============ حذف محصول ============
 async def admin_remove_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     data = load_data()
+    text = "➖ حذف محصول\n\nابتدا دسته را انتخاب کنید:"
     keyboard = []
-    for name in data["products"]:
-        keyboard.append([InlineKeyboardButton(f"🗑 {name}", callback_data=f"remove_{name}")])
+
+    for cat_name in data.get("categories", {}).keys():
+        keyboard.append([
+            InlineKeyboardButton(f"📂 {cat_name}", callback_data=f"rmcat_{cat_name}")
+        ])
 
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text("➖ حذف محصول\n\nکدام محصول حذف شود؟", reply_markup=reply_markup)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_remove_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_name = query.data.replace("rmcat_", "")
+    data = load_data()
+    products = data.get("categories", {}).get(cat_name, {})
+
+    text = f"➖ حذف از {cat_name}\n\nمحصول را انتخاب کنید:"
+    keyboard = []
+
+    for name in products:
+        keyboard.append([InlineKeyboardButton(f"🗑 {name}", callback_data=f"remove_{name}")])
+
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_remove")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
 async def confirm_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -654,10 +968,16 @@ async def confirm_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     product_name = query.data.replace("remove_", "")
     data = load_data()
+    
+    removed = False
+    for cat_name, products in data.get("categories", {}).items():
+        if product_name in products:
+            del data["categories"][cat_name][product_name]
+            save_data(data)
+            removed = True
+            break
 
-    if product_name in data["products"]:
-        del data["products"][product_name]
-        save_data(data)
+    if removed:
         text = f"✅ {product_name} حذف شد!"
     else:
         text = "❌ محصول پیدا نشد!"
@@ -680,7 +1000,7 @@ async def admin_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not orders:
         text = "📋 هیچ سفارشی ثبت نشده."
     else:
-        text = "📋 سفارشات:\n\n"
+        text = "📋 آخرین سفارشات:\n\n"
         for order in orders[-10:]:
             items_text = ""
             for item, qty in order["items"].items():
@@ -693,8 +1013,7 @@ async def admin_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📍 {order['customer_address']}\n"
                 f"🚚 {order['shipping_method']}\n"
                 f"📦:\n{items_text}"
-                f"💵 {format_price(order['grand_total'])}\n"
-                f"📋 {order['status']}\n\n"
+                f"💵 {format_price(order['grand_total'])}\n\n"
             )
 
     keyboard = [
@@ -723,12 +1042,16 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = load_data()
     orders = data.get("orders", [])
+    
+    total_products = sum(len(prods) for prods in data.get("categories", {}).values())
+    total_categories = len(data.get("categories", {}))
 
     text = (
-        f"📊 آمار فروشگاه:\n\n"
+        f"📊 آمار فروشگاه گهنیج:\n\n"
         f"📦 تعداد سفارشات: {len(orders)}\n"
         f"💰 مجموع فروش: {format_price(sum(o.get('grand_total', 0) for o in orders))}\n"
-        f"🌶 تعداد محصولات: {len(data['products'])}"
+        f"📂 تعداد دسته ها: {total_categories}\n"
+        f"🌶 تعداد کل محصولات: {total_products}"
     )
 
     keyboard = [
@@ -758,6 +1081,7 @@ def main():
         states={
             MAIN_MENU: [
                 CallbackQueryHandler(browse_products, pattern="^browse$"),
+                CallbackQueryHandler(show_category, pattern="^cat_"),
                 CallbackQueryHandler(view_product, pattern="^product_"),
                 CallbackQueryHandler(add_to_cart, pattern="^qty_"),
                 CallbackQueryHandler(show_cart, pattern="^cart$"),
@@ -767,9 +1091,12 @@ def main():
                 CallbackQueryHandler(search_start, pattern="^search$"),
                 CallbackQueryHandler(admin_panel, pattern="^admin$"),
                 CallbackQueryHandler(admin_prices, pattern="^admin_prices$"),
+                CallbackQueryHandler(admin_price_category, pattern="^adminprice_cat_"),
                 CallbackQueryHandler(admin_select_for_price, pattern="^editprice_"),
                 CallbackQueryHandler(admin_add_product, pattern="^admin_add$"),
+                CallbackQueryHandler(admin_select_cat_for_add, pattern="^addcat_"),
                 CallbackQueryHandler(admin_remove_product, pattern="^admin_remove$"),
+                CallbackQueryHandler(admin_remove_cat, pattern="^rmcat_"),
                 CallbackQueryHandler(confirm_remove, pattern="^remove_"),
                 CallbackQueryHandler(admin_orders, pattern="^admin_orders$"),
                 CallbackQueryHandler(admin_stats, pattern="^admin_stats$"),
