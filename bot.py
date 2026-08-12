@@ -13,7 +13,21 @@ import threading
 
 # ============ تنظیمات ============
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "TOKEN")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
+
+# پشتیبانی از چند مدیر (با کاما جدا در Render)
+# مثال: ADMIN_ID=123456789,987654321
+ADMIN_ID_RAW = os.environ.get("ADMIN_ID", "0")
+try:
+    if "," in ADMIN_ID_RAW:
+        DEFAULT_ADMIN_IDS = [int(x.strip()) for x in ADMIN_ID_RAW.split(",") if x.strip()]
+    else:
+        DEFAULT_ADMIN_IDS = [int(ADMIN_ID_RAW)]
+except ValueError:
+    DEFAULT_ADMIN_IDS = [0]
+
+# آیدی اصلی (اولین آیدی در متغیر) - این نمی تواند حذف شود
+SUPER_ADMIN_ID = DEFAULT_ADMIN_IDS[0] if DEFAULT_ADMIN_IDS else 0
+
 DATA_FILE = "data.json"
 PORT = int(os.environ.get("PORT", 10000))
 
@@ -44,8 +58,9 @@ def run_health_server():
     ADMIN_ADD_PRODUCT_NAME, ADMIN_ADD_PRODUCT_PRICE, ADMIN_ADD_PRODUCT_UNIT,
     ADMIN_NEW_SHIPPING_PRICE, ADMIN_ADD_SHIPPING_NAME, ADMIN_ADD_SHIPPING_PRICE,
     ADMIN_NEW_CARD_NUMBER, ADMIN_NEW_CARD_HOLDER,
-    ADMIN_NEW_PHONE, ADMIN_NEW_ADDRESS, ADMIN_NEW_HOURS
-) = range(18)
+    ADMIN_NEW_PHONE, ADMIN_NEW_ADDRESS, ADMIN_NEW_HOURS,
+    ADMIN_ADD_NEW_ADMIN_ID
+) = range(19)
 
 # ============ دیتابیس ============
 def load_data():
@@ -59,7 +74,12 @@ def load_data():
                     "address": "تهران",
                     "hours": "۹ صبح تا ۹ شب"
                 }
-                save_data(data)
+            if "admins" not in data:
+                data["admins"] = list(DEFAULT_ADMIN_IDS)
+            # اطمینان از اینکه SUPER_ADMIN همیشه در لیست هست
+            if SUPER_ADMIN_ID not in data["admins"]:
+                data["admins"].append(SUPER_ADMIN_ID)
+            save_data(data)
             return data
     else:
         default_data = {
@@ -221,7 +241,8 @@ def load_data():
                 "phone": "09XXXXXXXXX",
                 "address": "تهران",
                 "hours": "۹ صبح تا ۹ شب"
-            }
+            },
+            "admins": list(DEFAULT_ADMIN_IDS)
         }
         save_data(default_data)
         return default_data
@@ -246,6 +267,16 @@ def find_product(data, product_name):
             return products[product_name], cat_name
     return None, None
 
+def is_admin(user_id):
+    """چک می کنه که کاربر مدیر هست یا نه"""
+    data = load_data()
+    admins = data.get("admins", list(DEFAULT_ADMIN_IDS))
+    return user_id in admins
+
+def is_super_admin(user_id):
+    """چک می کنه که کاربر مدیر ارشد هست یا نه"""
+    return user_id == SUPER_ADMIN_ID
+
 # ============ شروع ============
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -265,7 +296,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📞 تماس با ما", callback_data="contact")],
     ]
 
-    if user.id == ADMIN_ID:
+    if is_admin(user.id):
         keyboard.append([InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -630,22 +661,26 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔑 آیدی: {order['user_id']}"
     )
 
-    try:
-        if len(admin_text) > 4000:
-            chunks = [admin_text[i:i+4000] for i in range(0, len(admin_text), 4000)]
-            for chunk in chunks:
-                await context.bot.send_message(chat_id=ADMIN_ID, text=chunk)
-        else:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text)
-        
-        photo = update.message.photo[-1]
-        await context.bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=photo.file_id,
-            caption=f"🧾 رسید پرداخت سفارش #{order['order_id']}"
-        )
-    except Exception as e:
-        logger.error(f"Error sending to admin: {e}")
+    # ارسال به تمام مدیران
+    admins = data.get("admins", list(DEFAULT_ADMIN_IDS))
+    photo = update.message.photo[-1]
+    
+    for admin_id in admins:
+        try:
+            if len(admin_text) > 4000:
+                chunks = [admin_text[i:i+4000] for i in range(0, len(admin_text), 4000)]
+                for chunk in chunks:
+                    await context.bot.send_message(chat_id=admin_id, text=chunk)
+            else:
+                await context.bot.send_message(chat_id=admin_id, text=admin_text)
+            
+            await context.bot.send_photo(
+                chat_id=admin_id,
+                photo=photo.file_id,
+                caption=f"🧾 رسید پرداخت سفارش #{order['order_id']}"
+            )
+        except Exception as e:
+            logger.error(f"Error sending to admin {admin_id}: {e}")
 
     context.user_data["cart"] = {}
     return ConversationHandler.END
@@ -723,7 +758,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if update.effective_user.id != ADMIN_ID:
+    if not is_admin(update.effective_user.id):
         await query.edit_message_text("❌ شما دسترسی ندارید!")
         return MAIN_MENU
 
@@ -738,9 +773,156 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📞 مدیریت اطلاعات تماس", callback_data="admin_contact")],
         [InlineKeyboardButton("📋 لیست سفارشات", callback_data="admin_orders")],
         [InlineKeyboardButton("📊 آمار فروش", callback_data="admin_stats")],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="back_main")],
     ]
+    
+    # فقط مدیر ارشد میتونه مدیران رو مدیریت کنه
+    if is_super_admin(update.effective_user.id):
+        keyboard.append([InlineKeyboardButton("👥 مدیریت مدیران", callback_data="admin_admins")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_main")])
 
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+# ============ مدیریت مدیران (فقط برای مدیر ارشد) ============
+async def admin_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if not is_super_admin(update.effective_user.id):
+        await query.edit_message_text("❌ فقط مدیر ارشد دسترسی دارد!")
+        return MAIN_MENU
+
+    data = load_data()
+    admins = data.get("admins", list(DEFAULT_ADMIN_IDS))
+
+    text = "👥 مدیریت مدیران\n\nمدیران فعلی:\n\n"
+    keyboard = []
+
+    for admin_id in admins:
+        if admin_id == SUPER_ADMIN_ID:
+            text += f"👑 {admin_id} (مدیر ارشد)\n"
+        else:
+            text += f"👤 {admin_id}\n"
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"🗑 حذف {admin_id}",
+                    callback_data=f"rmadmin_{admin_id}"
+                )
+            ])
+
+    keyboard.append([InlineKeyboardButton("➕ افزودن مدیر جدید", callback_data="addadmin_new")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if not is_super_admin(update.effective_user.id):
+        await query.edit_message_text("❌ فقط مدیر ارشد دسترسی دارد!")
+        return MAIN_MENU
+
+    await query.edit_message_text(
+        "➕ افزودن مدیر جدید\n\n"
+        "لطفا آیدی عددی کاربر جدید را وارد کنید:\n\n"
+        "💡 راهنما:\n"
+        "کاربر باید به ربات @userinfobot در تلگرام رفته و /start بزند.\n"
+        "عدد Id که نشان داده می شود را کپی کند و به شما بدهد.\n\n"
+        "(مثلا: 123456789)"
+    )
+    return ADMIN_ADD_NEW_ADMIN_ID
+
+async def save_new_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        new_admin_id = int(update.message.text.strip())
+    except ValueError:
+        await update.message.reply_text("❌ لطفا فقط عدد وارد کنید!")
+        return ADMIN_ADD_NEW_ADMIN_ID
+
+    data = load_data()
+    admins = data.get("admins", list(DEFAULT_ADMIN_IDS))
+
+    if new_admin_id in admins:
+        await update.message.reply_text(f"⚠️ کاربر {new_admin_id} از قبل مدیر است!")
+    else:
+        admins.append(new_admin_id)
+        data["admins"] = admins
+        save_data(data)
+        
+        await update.message.reply_text(
+            f"✅ مدیر جدید اضافه شد!\n\n"
+            f"🆔 آیدی: {new_admin_id}\n\n"
+            f"💡 حالا این کاربر می تواند به ربات پیام /start بدهد و دکمه ⚙️ پنل مدیریت را ببیند."
+        )
+        
+        # اطلاع به مدیر جدید
+        try:
+            await context.bot.send_message(
+                chat_id=new_admin_id,
+                text=(
+                    "🎉 تبریک! شما به عنوان مدیر فروشگاه ادویه جات گهنیج انتخاب شدید.\n\n"
+                    "برای شروع، دستور /start را بزنید و دکمه ⚙️ پنل مدیریت را انتخاب کنید."
+                )
+            )
+        except Exception as e:
+            logger.warning(f"Could not notify new admin {new_admin_id}: {e}")
+            await update.message.reply_text(
+                "⚠️ توجه: نتوانستم به مدیر جدید پیام دهم. "
+                "احتمالاً هنوز به ربات پیام نداده است. "
+                "از او بخواهید یک بار /start بزند."
+            )
+
+    keyboard = [
+        [InlineKeyboardButton("👥 مدیریت مدیران", callback_data="admin_admins")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_remove_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if not is_super_admin(update.effective_user.id):
+        await query.edit_message_text("❌ فقط مدیر ارشد دسترسی دارد!")
+        return MAIN_MENU
+
+    admin_id_to_remove = int(query.data.replace("rmadmin_", ""))
+    
+    if admin_id_to_remove == SUPER_ADMIN_ID:
+        await query.edit_message_text("❌ نمی توانید مدیر ارشد را حذف کنید!")
+        return MAIN_MENU
+
+    data = load_data()
+    admins = data.get("admins", list(DEFAULT_ADMIN_IDS))
+
+    if admin_id_to_remove in admins:
+        admins.remove(admin_id_to_remove)
+        data["admins"] = admins
+        save_data(data)
+        text = f"✅ مدیر {admin_id_to_remove} حذف شد!"
+        
+        # اطلاع به مدیر حذف شده
+        try:
+            await context.bot.send_message(
+                chat_id=admin_id_to_remove,
+                text="ℹ️ دسترسی مدیریت شما در فروشگاه ادویه جات گهنیج لغو شد."
+            )
+        except Exception as e:
+            logger.warning(f"Could not notify removed admin: {e}")
+    else:
+        text = "❌ مدیر پیدا نشد!"
+
+    keyboard = [
+        [InlineKeyboardButton("👥 مدیریت مدیران", callback_data="admin_admins")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
@@ -1428,6 +1610,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = load_data()
     orders = data.get("orders", [])
+    admins = data.get("admins", list(DEFAULT_ADMIN_IDS))
     
     total_products = sum(len(prods) for prods in data.get("categories", {}).values())
     total_categories = len(data.get("categories", {}))
@@ -1438,7 +1621,8 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 مجموع فروش: {format_price(sum(o.get('grand_total', 0) for o in orders))}\n"
         f"📂 تعداد دسته ها: {total_categories}\n"
         f"🌶 تعداد کل محصولات: {total_products}\n"
-        f"🚚 تعداد روش های ارسال: {len(data.get('shipping_options', {}))}"
+        f"🚚 تعداد روش های ارسال: {len(data.get('shipping_options', {}))}\n"
+        f"👥 تعداد مدیران: {len(admins)}"
     )
 
     keyboard = [
@@ -1460,6 +1644,8 @@ def main():
     health_thread = threading.Thread(target=run_health_server, daemon=True)
     health_thread.start()
     logger.info(f"Health server on port {PORT}")
+    logger.info(f"Super Admin ID: {SUPER_ADMIN_ID}")
+    logger.info(f"Default Admins: {DEFAULT_ADMIN_IDS}")
 
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -1498,6 +1684,9 @@ def main():
                 CallbackQueryHandler(admin_edit_hours, pattern="^editcontact_hours$"),
                 CallbackQueryHandler(admin_orders, pattern="^admin_orders$"),
                 CallbackQueryHandler(admin_stats, pattern="^admin_stats$"),
+                CallbackQueryHandler(admin_admins, pattern="^admin_admins$"),
+                CallbackQueryHandler(admin_add_admin_start, pattern="^addadmin_new$"),
+                CallbackQueryHandler(admin_remove_admin, pattern="^rmadmin_"),
                 CallbackQueryHandler(back_to_main, pattern="^back_main$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message),
             ],
@@ -1524,6 +1713,7 @@ def main():
             ADMIN_NEW_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_phone)],
             ADMIN_NEW_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_address)],
             ADMIN_NEW_HOURS: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_hours)],
+            ADMIN_ADD_NEW_ADMIN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_new_admin)],
         },
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start)],
     )
