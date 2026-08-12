@@ -41,15 +41,26 @@ def run_health_server():
 (
     MAIN_MENU, CHECKOUT_NAME, CHECKOUT_PHONE, CHECKOUT_ADDRESS,
     CHECKOUT_SHIPPING, UPLOAD_RECEIPT, ADMIN_NEW_PRICE,
-    ADMIN_ADD_PRODUCT_CAT, ADMIN_ADD_PRODUCT_NAME,
-    ADMIN_ADD_PRODUCT_PRICE, ADMIN_ADD_PRODUCT_UNIT
-) = range(11)
+    ADMIN_ADD_PRODUCT_NAME, ADMIN_ADD_PRODUCT_PRICE, ADMIN_ADD_PRODUCT_UNIT,
+    ADMIN_NEW_SHIPPING_PRICE, ADMIN_ADD_SHIPPING_NAME, ADMIN_ADD_SHIPPING_PRICE,
+    ADMIN_NEW_CARD_NUMBER, ADMIN_NEW_CARD_HOLDER,
+    ADMIN_NEW_PHONE, ADMIN_NEW_ADDRESS, ADMIN_NEW_HOURS
+) = range(18)
 
 # ============ دیتابیس ============
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            # اطمینان از وجود همه فیلدها
+            if "contact_info" not in data:
+                data["contact_info"] = {
+                    "phone": "09XXXXXXXXX",
+                    "address": "تهران",
+                    "hours": "۹ صبح تا ۹ شب"
+                }
+                save_data(data)
+            return data
     else:
         default_data = {
             "categories": {
@@ -202,10 +213,15 @@ def load_data():
                 "پست پیشتاز": 45000,
                 "پست سفارشی": 30000,
                 "تیپاکس": 65000,
-                "پیک ": 100000
+                "پیک (تهران)": 50000
             },
-            "card_number": "6219861941858903",
-            "card_holder": "فهیمه امینی"
+            "card_number": "6037-XXXX-XXXX-XXXX",
+            "card_holder": "نام صاحب فروشگاه",
+            "contact_info": {
+                "phone": "09XXXXXXXXX",
+                "address": "تهران",
+                "hours": "۹ صبح تا ۹ شب"
+            }
         }
         save_data(default_data)
         return default_data
@@ -218,7 +234,6 @@ def format_price(price):
     return f"{price:,} تومان"
 
 def get_all_products(data):
-    """همه محصولات رو از همه دسته ها برمیگردونه"""
     all_products = {}
     for cat_name, products in data.get("categories", {}).items():
         for prod_name, prod_info in products.items():
@@ -226,7 +241,6 @@ def get_all_products(data):
     return all_products
 
 def find_product(data, product_name):
-    """یه محصول رو در دسته ها پیدا میکنه"""
     for cat_name, products in data.get("categories", {}).items():
         if product_name in products:
             return products[product_name], cat_name
@@ -289,7 +303,6 @@ async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ============ نمایش محصولات یک دسته ============
 async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -316,14 +329,12 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # چون متن ممکنه طولانی باشه
     if len(text) > 4000:
         text = text[:3900] + "\n...\n(محصولات زیاد است، از دکمه ها انتخاب کنید)"
 
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ============ جزئیات محصول ============
 async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -365,7 +376,6 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ============ اضافه به سبد ============
 async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -407,7 +417,6 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ============ سبد خرید ============
 async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -622,7 +631,6 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     try:
-        # اگه متن طولانی باشه، تیکه تیکه بفرست
         if len(admin_text) > 4000:
             chunks = [admin_text[i:i+4000] for i in range(0, len(admin_text), 4000)]
             for chunk in chunks:
@@ -646,12 +654,15 @@ async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    data = load_data()
+    contact = data.get("contact_info", {})
+
     text = (
         "📞 تماس با ما:\n\n"
-        "📱 تلفن: 09158483757\n"
-        "🏪  آدرس: ایرانشهر بلوار شهید بهشتی\n"
-        "⏰ ساعت کاری: 10 الی 14 و 15:30 الی 21 \n\n"
-        "🌿 فروشگاه ادویه گهنیج"
+        f"📱 تلفن: {contact.get('phone', '09XXXXXXXXX')}\n"
+        f"🏪 آدرس: {contact.get('address', 'تهران')}\n"
+        f"⏰ ساعت کاری: {contact.get('hours', '۹ صبح تا ۹ شب')}\n\n"
+        "🌿 فروشگاه ادویه جات گهنیج"
     )
 
     keyboard = [[InlineKeyboardButton("🔙 بازگشت", callback_data="back_main")]]
@@ -689,7 +700,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             keyboard = []
             count = 0
             for name, info in results.items():
-                if count >= 30:  # حداکثر 30 نتیجه
+                if count >= 30:
                     text += f"\n(و {len(results) - 30} مورد دیگر...)"
                     break
                 text += f"▫️ {name} - {format_price(info['price'])}\n"
@@ -719,9 +730,12 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "⚙️ پنل مدیریت فروشگاه گهنیج\n\nیکی از گزینه ها را انتخاب کنید:"
 
     keyboard = [
-        [InlineKeyboardButton("💰 ویرایش قیمت ها", callback_data="admin_prices")],
+        [InlineKeyboardButton("💰 ویرایش قیمت محصولات", callback_data="admin_prices")],
         [InlineKeyboardButton("➕ افزودن محصول", callback_data="admin_add")],
         [InlineKeyboardButton("➖ حذف محصول", callback_data="admin_remove")],
+        [InlineKeyboardButton("📦 مدیریت هزینه ارسال", callback_data="admin_shipping")],
+        [InlineKeyboardButton("💳 مدیریت اطلاعات پرداخت", callback_data="admin_payment")],
+        [InlineKeyboardButton("📞 مدیریت اطلاعات تماس", callback_data="admin_contact")],
         [InlineKeyboardButton("📋 لیست سفارشات", callback_data="admin_orders")],
         [InlineKeyboardButton("📊 آمار فروش", callback_data="admin_stats")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="back_main")],
@@ -731,6 +745,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
+# ============ ویرایش قیمت محصولات ============
 async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -813,7 +828,6 @@ async def save_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_name = context.user_data.get("editing_product")
     data = load_data()
     
-    # پیدا کردن و آپدیت
     updated = False
     for cat_name, products in data.get("categories", {}).items():
         if product_name in products:
@@ -990,6 +1004,378 @@ async def confirm_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
+# ============ مدیریت هزینه ارسال ============
+async def admin_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    shipping = data.get("shipping_options", {})
+
+    text = "📦 مدیریت هزینه ارسال\n\nروش های ارسال فعلی:\n\n"
+    keyboard = []
+
+    for method, cost in shipping.items():
+        text += f"▫️ {method}: {format_price(cost)}\n"
+        keyboard.append([
+            InlineKeyboardButton(
+                f"✏️ ویرایش {method}",
+                callback_data=f"editship_{method}"
+            ),
+            InlineKeyboardButton(
+                f"🗑 حذف",
+                callback_data=f"rmship_{method}"
+            )
+        ])
+
+    keyboard.append([InlineKeyboardButton("➕ افزودن روش جدید", callback_data="addship_new")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_edit_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    method = query.data.replace("editship_", "")
+    context.user_data["editing_shipping"] = method
+
+    data = load_data()
+    current_cost = data["shipping_options"].get(method, 0)
+
+    await query.edit_message_text(
+        f"✏️ ویرایش هزینه ارسال\n\n"
+        f"🚚 روش: {method}\n"
+        f"💰 هزینه فعلی: {format_price(current_cost)}\n\n"
+        f"لطفا هزینه جدید را به تومان وارد کنید:\n(فقط عدد، مثلا: 50000)"
+    )
+    return ADMIN_NEW_SHIPPING_PRICE
+
+async def save_shipping_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        new_price = int(update.message.text.replace(",", "").replace("،", "").strip())
+    except ValueError:
+        await update.message.reply_text("❌ لطفا فقط عدد وارد کنید!")
+        return ADMIN_NEW_SHIPPING_PRICE
+
+    method = context.user_data.get("editing_shipping")
+    data = load_data()
+
+    if method in data["shipping_options"]:
+        old_price = data["shipping_options"][method]
+        data["shipping_options"][method] = new_price
+        save_data(data)
+
+        await update.message.reply_text(
+            f"✅ هزینه ارسال تغییر کرد!\n\n"
+            f"🚚 روش: {method}\n"
+            f"💰 قبلی: {format_price(old_price)}\n"
+            f"💰 جدید: {format_price(new_price)}"
+        )
+
+    keyboard = [
+        [InlineKeyboardButton("📦 مدیریت هزینه ارسال", callback_data="admin_shipping")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_remove_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    method = query.data.replace("rmship_", "")
+    data = load_data()
+
+    if method in data["shipping_options"]:
+        del data["shipping_options"][method]
+        save_data(data)
+        text = f"✅ روش ارسال «{method}» حذف شد!"
+    else:
+        text = "❌ روش ارسال پیدا نشد!"
+
+    keyboard = [
+        [InlineKeyboardButton("📦 مدیریت هزینه ارسال", callback_data="admin_shipping")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_add_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    await query.edit_message_text(
+        "➕ افزودن روش ارسال جدید\n\n"
+        "نام روش ارسال را وارد کنید:\n(مثلا: باربری، پیک موتوری تهران)"
+    )
+    return ADMIN_ADD_SHIPPING_NAME
+
+async def get_shipping_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["new_shipping_name"] = update.message.text.strip()
+    await update.message.reply_text(
+        f"✅ نام: {update.message.text}\n\n"
+        f"هزینه ارسال را به تومان وارد کنید:\n(فقط عدد، مثلا: 55000)"
+    )
+    return ADMIN_ADD_SHIPPING_PRICE
+
+async def get_shipping_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        price = int(update.message.text.replace(",", "").replace("،", "").strip())
+    except ValueError:
+        await update.message.reply_text("❌ فقط عدد وارد کنید!")
+        return ADMIN_ADD_SHIPPING_PRICE
+
+    name = context.user_data["new_shipping_name"]
+    data = load_data()
+    data["shipping_options"][name] = price
+    save_data(data)
+
+    await update.message.reply_text(
+        f"✅ روش ارسال اضافه شد!\n\n"
+        f"🚚 نام: {name}\n"
+        f"💰 هزینه: {format_price(price)}"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("📦 مدیریت هزینه ارسال", callback_data="admin_shipping")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+# ============ مدیریت اطلاعات پرداخت ============
+async def admin_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+
+    text = (
+        f"💳 مدیریت اطلاعات پرداخت\n\n"
+        f"📌 اطلاعات فعلی:\n\n"
+        f"💳 شماره کارت: {data.get('card_number', 'تنظیم نشده')}\n"
+        f"👤 به نام: {data.get('card_holder', 'تنظیم نشده')}\n\n"
+        f"چه چیزی را ویرایش می کنید؟"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("💳 ویرایش شماره کارت", callback_data="editcard_number")],
+        [InlineKeyboardButton("👤 ویرایش نام صاحب کارت", callback_data="editcard_holder")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_edit_card_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    await query.edit_message_text(
+        f"💳 ویرایش شماره کارت\n\n"
+        f"شماره کارت فعلی:\n{data.get('card_number', 'تنظیم نشده')}\n\n"
+        f"لطفا شماره کارت جدید را وارد کنید:\n"
+        f"(مثلا: 6037-9977-1234-5678 یا 6037997712345678)"
+    )
+    return ADMIN_NEW_CARD_NUMBER
+
+async def save_card_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_card = update.message.text.strip()
+    data = load_data()
+    old_card = data.get("card_number", "تنظیم نشده")
+    data["card_number"] = new_card
+    save_data(data)
+
+    await update.message.reply_text(
+        f"✅ شماره کارت تغییر کرد!\n\n"
+        f"💳 قبلی: {old_card}\n"
+        f"💳 جدید: {new_card}"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("💳 مدیریت پرداخت", callback_data="admin_payment")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_edit_card_holder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    await query.edit_message_text(
+        f"👤 ویرایش نام صاحب کارت\n\n"
+        f"نام فعلی: {data.get('card_holder', 'تنظیم نشده')}\n\n"
+        f"لطفا نام جدید صاحب کارت را وارد کنید:"
+    )
+    return ADMIN_NEW_CARD_HOLDER
+
+async def save_card_holder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_holder = update.message.text.strip()
+    data = load_data()
+    old_holder = data.get("card_holder", "تنظیم نشده")
+    data["card_holder"] = new_holder
+    save_data(data)
+
+    await update.message.reply_text(
+        f"✅ نام صاحب کارت تغییر کرد!\n\n"
+        f"👤 قبلی: {old_holder}\n"
+        f"👤 جدید: {new_holder}"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("💳 مدیریت پرداخت", callback_data="admin_payment")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+# ============ مدیریت اطلاعات تماس ============
+async def admin_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    contact = data.get("contact_info", {})
+
+    text = (
+        f"📞 مدیریت اطلاعات تماس\n\n"
+        f"📌 اطلاعات فعلی:\n\n"
+        f"📱 تلفن: {contact.get('phone', 'تنظیم نشده')}\n"
+        f"🏪 آدرس: {contact.get('address', 'تنظیم نشده')}\n"
+        f"⏰ ساعت کاری: {contact.get('hours', 'تنظیم نشده')}\n\n"
+        f"چه چیزی را ویرایش می کنید؟"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("📱 ویرایش شماره تلفن", callback_data="editcontact_phone")],
+        [InlineKeyboardButton("🏪 ویرایش آدرس", callback_data="editcontact_address")],
+        [InlineKeyboardButton("⏰ ویرایش ساعت کاری", callback_data="editcontact_hours")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_edit_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    contact = data.get("contact_info", {})
+    await query.edit_message_text(
+        f"📱 ویرایش شماره تلفن\n\n"
+        f"شماره فعلی: {contact.get('phone', 'تنظیم نشده')}\n\n"
+        f"لطفا شماره تلفن جدید را وارد کنید:\n(مثلا: 09121234567)"
+    )
+    return ADMIN_NEW_PHONE
+
+async def save_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_phone = update.message.text.strip()
+    data = load_data()
+    if "contact_info" not in data:
+        data["contact_info"] = {}
+    old_phone = data["contact_info"].get("phone", "تنظیم نشده")
+    data["contact_info"]["phone"] = new_phone
+    save_data(data)
+
+    await update.message.reply_text(
+        f"✅ شماره تلفن تغییر کرد!\n\n"
+        f"📱 قبلی: {old_phone}\n"
+        f"📱 جدید: {new_phone}"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("📞 مدیریت تماس", callback_data="admin_contact")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_edit_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    contact = data.get("contact_info", {})
+    await query.edit_message_text(
+        f"🏪 ویرایش آدرس فروشگاه\n\n"
+        f"آدرس فعلی: {contact.get('address', 'تنظیم نشده')}\n\n"
+        f"لطفا آدرس جدید را وارد کنید:"
+    )
+    return ADMIN_NEW_ADDRESS
+
+async def save_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_address = update.message.text.strip()
+    data = load_data()
+    if "contact_info" not in data:
+        data["contact_info"] = {}
+    old_address = data["contact_info"].get("address", "تنظیم نشده")
+    data["contact_info"]["address"] = new_address
+    save_data(data)
+
+    await update.message.reply_text(
+        f"✅ آدرس تغییر کرد!\n\n"
+        f"🏪 قبلی: {old_address}\n"
+        f"🏪 جدید: {new_address}"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("📞 مدیریت تماس", callback_data="admin_contact")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_edit_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    contact = data.get("contact_info", {})
+    await query.edit_message_text(
+        f"⏰ ویرایش ساعت کاری\n\n"
+        f"ساعت فعلی: {contact.get('hours', 'تنظیم نشده')}\n\n"
+        f"لطفا ساعت کاری جدید را وارد کنید:\n(مثلا: ۹ صبح تا ۹ شب)"
+    )
+    return ADMIN_NEW_HOURS
+
+async def save_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_hours = update.message.text.strip()
+    data = load_data()
+    if "contact_info" not in data:
+        data["contact_info"] = {}
+    old_hours = data["contact_info"].get("hours", "تنظیم نشده")
+    data["contact_info"]["hours"] = new_hours
+    save_data(data)
+
+    await update.message.reply_text(
+        f"✅ ساعت کاری تغییر کرد!\n\n"
+        f"⏰ قبلی: {old_hours}\n"
+        f"⏰ جدید: {new_hours}"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("📞 مدیریت تماس", callback_data="admin_contact")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+# ============ لیست سفارشات و آمار ============
 async def admin_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1051,7 +1437,8 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📦 تعداد سفارشات: {len(orders)}\n"
         f"💰 مجموع فروش: {format_price(sum(o.get('grand_total', 0) for o in orders))}\n"
         f"📂 تعداد دسته ها: {total_categories}\n"
-        f"🌶 تعداد کل محصولات: {total_products}"
+        f"🌶 تعداد کل محصولات: {total_products}\n"
+        f"🚚 تعداد روش های ارسال: {len(data.get('shipping_options', {}))}"
     )
 
     keyboard = [
@@ -1098,6 +1485,17 @@ def main():
                 CallbackQueryHandler(admin_remove_product, pattern="^admin_remove$"),
                 CallbackQueryHandler(admin_remove_cat, pattern="^rmcat_"),
                 CallbackQueryHandler(confirm_remove, pattern="^remove_"),
+                CallbackQueryHandler(admin_shipping, pattern="^admin_shipping$"),
+                CallbackQueryHandler(admin_edit_shipping, pattern="^editship_"),
+                CallbackQueryHandler(admin_remove_shipping, pattern="^rmship_"),
+                CallbackQueryHandler(admin_add_shipping, pattern="^addship_new$"),
+                CallbackQueryHandler(admin_payment, pattern="^admin_payment$"),
+                CallbackQueryHandler(admin_edit_card_number, pattern="^editcard_number$"),
+                CallbackQueryHandler(admin_edit_card_holder, pattern="^editcard_holder$"),
+                CallbackQueryHandler(admin_contact, pattern="^admin_contact$"),
+                CallbackQueryHandler(admin_edit_phone, pattern="^editcontact_phone$"),
+                CallbackQueryHandler(admin_edit_address, pattern="^editcontact_address$"),
+                CallbackQueryHandler(admin_edit_hours, pattern="^editcontact_hours$"),
                 CallbackQueryHandler(admin_orders, pattern="^admin_orders$"),
                 CallbackQueryHandler(admin_stats, pattern="^admin_stats$"),
                 CallbackQueryHandler(back_to_main, pattern="^back_main$"),
@@ -1118,6 +1516,14 @@ def main():
             ADMIN_ADD_PRODUCT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_product_name)],
             ADMIN_ADD_PRODUCT_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_product_price)],
             ADMIN_ADD_PRODUCT_UNIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_product_unit)],
+            ADMIN_NEW_SHIPPING_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_shipping_price)],
+            ADMIN_ADD_SHIPPING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_shipping_name)],
+            ADMIN_ADD_SHIPPING_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_shipping_price)],
+            ADMIN_NEW_CARD_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_card_number)],
+            ADMIN_NEW_CARD_HOLDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_card_holder)],
+            ADMIN_NEW_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_phone)],
+            ADMIN_NEW_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_address)],
+            ADMIN_NEW_HOURS: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_hours)],
         },
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start)],
     )
