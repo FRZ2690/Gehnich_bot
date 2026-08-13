@@ -1,6 +1,7 @@
 import logging
 import json
 import os
+import hashlib
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
 )
@@ -14,8 +15,6 @@ import threading
 # ============ تنظیمات ============
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "TOKEN")
 
-# پشتیبانی از چند مدیر (با کاما جدا در Render)
-# مثال: ADMIN_ID=123456789,987654321
 ADMIN_ID_RAW = os.environ.get("ADMIN_ID", "0")
 try:
     if "," in ADMIN_ID_RAW:
@@ -25,7 +24,6 @@ try:
 except ValueError:
     DEFAULT_ADMIN_IDS = [0]
 
-# آیدی اصلی (اولین آیدی در متغیر) - این نمی تواند حذف شود
 SUPER_ADMIN_ID = DEFAULT_ADMIN_IDS[0] if DEFAULT_ADMIN_IDS else 0
 
 DATA_FILE = "data.json"
@@ -62,12 +60,232 @@ def run_health_server():
     ADMIN_ADD_NEW_ADMIN_ID
 ) = range(19)
 
+# ============ کش برای map کردن id به اسم ============
+_id_to_name_cache = {}
+_name_to_id_cache = {}
+_id_to_cat_cache = {}
+_cat_to_id_cache = {}
+
+def get_short_id(name, prefix=""):
+    """یک id کوتاه از هش نام تولید می کنه"""
+    h = hashlib.md5((prefix + name).encode('utf-8')).hexdigest()[:10]
+    return h
+
+def build_cache():
+    """کش رو از دیتا میسازه"""
+    global _id_to_name_cache, _name_to_id_cache, _id_to_cat_cache, _cat_to_id_cache
+    _id_to_name_cache = {}
+    _name_to_id_cache = {}
+    _id_to_cat_cache = {}
+    _cat_to_id_cache = {}
+    
+    data = load_data_raw()
+    for cat_name in data.get("categories", {}).keys():
+        cat_id = get_short_id(cat_name, "cat_")
+        _id_to_cat_cache[cat_id] = cat_name
+        _cat_to_id_cache[cat_name] = cat_id
+        
+        for prod_name in data["categories"][cat_name].keys():
+            prod_id = get_short_id(prod_name, "prod_")
+            _id_to_name_cache[prod_id] = prod_name
+            _name_to_id_cache[prod_name] = prod_id
+
+def get_cat_id(cat_name):
+    if cat_name not in _cat_to_id_cache:
+        build_cache()
+    return _cat_to_id_cache.get(cat_name, "")
+
+def get_cat_name(cat_id):
+    if cat_id not in _id_to_cat_cache:
+        build_cache()
+    return _id_to_cat_cache.get(cat_id, "")
+
+def get_prod_id(prod_name):
+    if prod_name not in _name_to_id_cache:
+        build_cache()
+    return _name_to_id_cache.get(prod_name, "")
+
+def get_prod_name(prod_id):
+    if prod_id not in _id_to_name_cache:
+        build_cache()
+    return _id_to_name_cache.get(prod_id, "")
+
 # ============ دیتابیس ============
+def load_data_raw():
+    """بدون کش سازی"""
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return get_default_data()
+
+def get_default_data():
+    return {
+        "categories": {
+            "چاشنی های گهنیج": {
+                "پودر لیمو عمانی (نمکپاشی)": {"price": 110000, "unit": "نمکپاشی", "available": True},
+                "چاشنی ماست (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
+                "چاشنی ماست (نیم کیلویی)": {"price": 475000, "unit": "نیم کیلویی", "available": True},
+                "ادویه سوسیس بندری (قوطی مربعی)": {"price": 200000, "unit": "قوطی مربعی", "available": True},
+                "ادویه سوسیس بندری (نیم کیلویی)": {"price": 590000, "unit": "نیم کیلویی", "available": True},
+                "چاشنی زعتر (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "چاشنی زعتر (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
+                "چاشنی املت (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
+                "چاشنی املت (نیم کیلویی)": {"price": 300000, "unit": "نیم کیلویی", "available": True},
+                "چاشنی سیب زمینی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "چاشنی سیب زمینی (نیم کیلویی)": {"price": 460000, "unit": "نیم کیلویی", "available": True},
+                "ایتالیایی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "ایتالیایی (نیم کیلویی)": {"price": 555000, "unit": "نیم کیلویی", "available": True},
+                "ادویه ماکارونی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "ادویه ماکارونی (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
+                "فلفل سیاه (نمکپاشی)": {"price": 220000, "unit": "نمکپاشی", "available": True},
+                "فلفل سیاه (نیم کیلویی)": {"price": 950000, "unit": "نیم کیلویی", "available": True},
+                "فلفل سیاه (نکوبیده قوطی 150گ)": {"price": 300000, "unit": "قوطی 150 گرم", "available": True},
+                "دارچین (نمکپاشی)": {"price": 100000, "unit": "نمکپاشی", "available": True},
+                "دارچین (نیم کیلویی)": {"price": 395000, "unit": "نیم کیلویی", "available": True},
+                "دارچین (سالم 150 گ)": {"price": 150000, "unit": "قوطی 150 گرم سالم", "available": True},
+                "پودر فلفل قرمز تند چیلی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "پودر فلفل قرمز تند چیلی (نیم کیلویی)": {"price": 640000, "unit": "نیم کیلویی", "available": True},
+            },
+            "ادویه جات ترکیبی گهنیج": {
+                "ادویه مامان بلوچی (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه مامان بلوچی (پاکت نیم کیلویی)": {"price": 600000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه بریانی بلوچی (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه بریانی بلوچی (پاکت نیم کیلویی)": {"price": 435000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه عربی مخصوص (قوطی مربعی 130گ)": {"price": 370000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه عربی مخصوص (پاکت نیم کیلویی)": {"price": 1245000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه کاری مخصوص (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه کاری مخصوص (پاکت نیم کیلویی)": {"price": 480000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه ماهی و میگو (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه ماهی و میگو (پاکت نیم کیلویی)": {"price": 570000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه کباب (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه کباب (پاکت نیم کیلویی)": {"price": 470000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه کرایی بلوچی (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه کرایی بلوچی (پاکت نیم کیلویی)": {"price": 610000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه کاچی (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه کاچی (پاکت نیم کیلویی)": {"price": 500000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه کاجون (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه کاجون (پاکت نیم کیلویی)": {"price": 480000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه مرغ (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه مرغ (نیم کیلویی پاکت)": {"price": 500000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه سمبوسه (قوطی مربعی 130گ)": {"price": 220000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه سمبوسه (پاکت نیم کیلویی)": {"price": 660000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه گراماسالا (قوطی مربعی 130گ)": {"price": 320000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه گراماسالا (پاکت نیم کیلویی)": {"price": 1035000, "unit": "پاکت نیم کیلویی", "available": True},
+                "ادویه فلافل (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
+                "ادویه پکوره (قوطی مربعی 130گ)": {"price": 120000, "unit": "قوطی مربعی 130 گرم", "available": True},
+            },
+            "ادویه جات اصلی": {
+                "پودر پاپریکا (قوطی مربعی)": {"price": 150000, "unit": "قوطی مربعی", "available": True},
+                "پودر پاپریکا (پاکت نیم کیلویی)": {"price": 360000, "unit": "پاکت نیم کیلویی", "available": True},
+                "پودر سیر خالص (قوطی 180 گ)": {"price": 220000, "unit": "قوطی 180 گرم", "available": True},
+                "پودر سیر خالص (پاکت نیم کیلویی)": {"price": 500000, "unit": "پاکت نیم کیلویی", "available": True},
+                "زیره سبز (قوطی مربعی)": {"price": 130000, "unit": "قوطی مربعی", "available": True},
+                "زیره سبز (پاکت نیم کیلویی)": {"price": 360000, "unit": "پاکت نیم کیلویی", "available": True},
+                "زیره سیاه (قوطی مربعی)": {"price": 410000, "unit": "قوطی مربعی", "available": True},
+                "زیره سیاه (پاکت نیم کیلویی)": {"price": 1330000, "unit": "پاکت نیم کیلویی", "available": True},
+                "زنجبیل (قوطی مربعی)": {"price": 140000, "unit": "قوطی مربعی", "available": True},
+                "زنجبیل (پاکت نیم کیلویی)": {"price": 480000, "unit": "پاکت نیم کیلویی", "available": True},
+                "پودر گشنیز (قوطی مربعی)": {"price": 100000, "unit": "قوطی مربعی", "available": True},
+                "پودر گشنیز (پاکت نیم کیلویی)": {"price": 280000, "unit": "پاکت نیم کیلویی", "available": True},
+                "تخم گشنیز (قوطی مربعی)": {"price": 80000, "unit": "قوطی مربعی", "available": True},
+                "تخم گشنیز (پاکت نیم کیلویی)": {"price": 280000, "unit": "پاکت نیم کیلویی", "available": True},
+            },
+            "دانه ها و تخم ها": {
+                "دانه چیا (200 گرمی)": {"price": 190000, "unit": "قوطی 200 گرم", "available": True},
+                "خاکشیر (200 گرمی)": {"price": 120000, "unit": "قوطی 200 گرم", "available": True},
+                "تخم شربتی ریز": {"price": 180000, "unit": "قوطی", "available": True},
+                "تخم شربتی درشت": {"price": 140000, "unit": "قوطی", "available": True},
+                "سیاهدانه": {"price": 200000, "unit": "قوطی", "available": True},
+                "بارهنگ": {"price": 160000, "unit": "قوطی", "available": True},
+                "پاپ کورن بزرگ (800 گ)": {"price": 330000, "unit": "قوطی 800 گرم", "available": True},
+                "اسپند": {"price": 80000, "unit": "قوطی", "available": True},
+                "تخم زنیان": {"price": 120000, "unit": "قوطی", "available": True},
+            },
+            "طعم دهنده ها": {
+                "آروماتز": {"price": 170000, "unit": "قوطی", "available": True},
+                "سیر و کره": {"price": 150000, "unit": "قوطی", "available": True},
+                "دود": {"price": 120000, "unit": "قوطی", "available": True},
+                "قارچ و خامه": {"price": 180000, "unit": "قوطی", "available": True},
+                "کره": {"price": 100000, "unit": "قوطی", "available": True},
+                "لیمو فلفلی زرد": {"price": 150000, "unit": "قوطی", "available": True},
+                "لیمو فلفلی چاشنی": {"price": 190000, "unit": "قوطی", "available": True},
+                "پنیر چدار": {"price": 120000, "unit": "قوطی", "available": True},
+                "پیاز جعفری": {"price": 150000, "unit": "قوطی", "available": True},
+                "کچاپ": {"price": 150000, "unit": "قوطی", "available": True},
+                "سماق": {"price": 200000, "unit": "قوطی", "available": True},
+                "ادویه انبه": {"price": 150000, "unit": "قوطی", "available": True},
+                "پودر آویشن": {"price": 200000, "unit": "قوطی", "available": True},
+                "ادویه برگر": {"price": 150000, "unit": "قوطی", "available": True},
+                "پودر لیمو": {"price": 110000, "unit": "قوطی", "available": True},
+                "پودر لبو": {"price": 120000, "unit": "قوطی", "available": True},
+                "عصاره مرغ": {"price": 120000, "unit": "قوطی", "available": True},
+            },
+            "سبزی خشک و متفرقه": {
+                "فلفل لاهوری (کناری)": {"price": 200000, "unit": "بسته", "available": True},
+                "نعناع خشک بزرگ": {"price": 220000, "unit": "بسته بزرگ", "available": True},
+                "نعناع خشک متوسط": {"price": 160000, "unit": "بسته متوسط", "available": True},
+                "شوید خشک بزرگ": {"price": 220000, "unit": "بسته بزرگ", "available": True},
+                "شنبلیله خشک": {"price": 230000, "unit": "بسته", "available": True},
+                "ترخون خشک": {"price": 260000, "unit": "بسته", "available": True},
+                "رزماری خشک قوطی": {"price": 70000, "unit": "قوطی", "available": True},
+                "برگ بو (40 گرم)": {"price": 100000, "unit": "بسته 40 گرم", "available": True},
+                "هل اکبر بنفش (20 گرمی)": {"price": 270000, "unit": "بسته 20 گرم", "available": True},
+                "نمک صورتی یک کیلو": {"price": 150000, "unit": "یک کیلو", "available": True},
+                "پرک لیمو کوچک": {"price": 200000, "unit": "بسته کوچک", "available": True},
+                "پرک لیمو بزرگ": {"price": 500000, "unit": "بسته بزرگ", "available": True},
+                "رب انار ترش": {"price": 450000, "unit": "بسته", "available": True},
+                "رب انار ترش متوسط": {"price": 420000, "unit": "بسته متوسط", "available": True},
+                "آبغوره خالص": {"price": 250000, "unit": "بسته", "available": True},
+                "غنچه گل محمدی": {"price": 300000, "unit": "بسته", "available": True},
+                "گلرنگ (زردی) بسته 80 گ": {"price": 250000, "unit": "بسته 80 گرم", "available": True},
+                "رب گوجه خالص خونگی 1100 گرم": {"price": 420000, "unit": "بسته 1100 گرم", "available": True},
+            },
+            "عرقیجات خالص": {
+                "گلاب ویژه": {"price": 290000, "unit": "بطری", "available": True},
+                "عرق نسترن": {"price": 190000, "unit": "بطری", "available": True},
+                "عرق بهار نارنج": {"price": 220000, "unit": "بطری", "available": True},
+                "عرق چهل گیاه": {"price": 200000, "unit": "بطری", "available": True},
+                "عرق زنیان": {"price": 150000, "unit": "بطری", "available": True},
+                "عرق بید مشک": {"price": 190000, "unit": "بطری", "available": True},
+                "عرق آویشن": {"price": 150000, "unit": "بطری", "available": True},
+                "عرق شاتره": {"price": 150000, "unit": "بطری", "available": True},
+                "عرق رازیانه": {"price": 150000, "unit": "بطری", "available": True},
+                "عرق شوید": {"price": 150000, "unit": "بطری", "available": True},
+                "عرق خار مریم": {"price": 150000, "unit": "بطری", "available": True},
+                "عرق خار شتر": {"price": 150000, "unit": "بطری", "available": True},
+                "عرق زیره": {"price": 150000, "unit": "بطری", "available": True},
+                "عرق کاسنی": {"price": 150000, "unit": "بطری", "available": True},
+                "عرق طارونه": {"price": 150000, "unit": "بطری", "available": True},
+                "معجون آرامش بخش": {"price": 270000, "unit": "بطری", "available": True},
+                "معجون معده": {"price": 270000, "unit": "بطری", "available": True},
+                "عرق نعناع": {"price": 220000, "unit": "بطری", "available": True},
+            },
+            "زردچوبه چارمنار": {
+                "زردچوبه چارمنار (نیم کیلو)": {"price": 470000, "unit": "نیم کیلو", "available": True},
+                "زردچوبه چارمنار (150 گرمی)": {"price": 180000, "unit": "150 گرمی", "available": True},
+            },
+        },
+        "orders": [],
+        "shipping_options": {
+            "پست پیشتاز": 45000,
+            "پست سفارشی": 30000,
+            "تیپاکس": 65000,
+            "پیک (تهران)": 50000
+        },
+        "card_number": "6037-XXXX-XXXX-XXXX",
+        "card_holder": "نام صاحب فروشگاه",
+        "contact_info": {
+            "phone": "09XXXXXXXXX",
+            "address": "تهران",
+            "hours": "۹ صبح تا ۹ شب"
+        },
+        "admins": list(DEFAULT_ADMIN_IDS)
+    }
+
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            # اطمینان از وجود همه فیلدها
             if "contact_info" not in data:
                 data["contact_info"] = {
                     "phone": "09XXXXXXXXX",
@@ -76,180 +294,20 @@ def load_data():
                 }
             if "admins" not in data:
                 data["admins"] = list(DEFAULT_ADMIN_IDS)
-            # اطمینان از اینکه SUPER_ADMIN همیشه در لیست هست
             if SUPER_ADMIN_ID not in data["admins"]:
                 data["admins"].append(SUPER_ADMIN_ID)
             save_data(data)
             return data
     else:
-        default_data = {
-            "categories": {
-                "چاشنی های گهنیج": {
-                    "پودر لیمو عمانی (نمکپاشی)": {"price": 110000, "unit": "نمکپاشی", "available": True},
-                    "چاشنی ماست (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
-                    "چاشنی ماست (نیم کیلویی)": {"price": 475000, "unit": "نیم کیلویی", "available": True},
-                    "ادویه سوسیس بندری (قوطی مربعی)": {"price": 200000, "unit": "قوطی مربعی", "available": True},
-                    "ادویه سوسیس بندری (نیم کیلویی)": {"price": 590000, "unit": "نیم کیلویی", "available": True},
-                    "چاشنی زعتر (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                    "چاشنی زعتر (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
-                    "چاشنی املت (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
-                    "چاشنی املت (نیم کیلویی)": {"price": 300000, "unit": "نیم کیلویی", "available": True},
-                    "چاشنی سیب زمینی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                    "چاشنی سیب زمینی (نیم کیلویی)": {"price": 460000, "unit": "نیم کیلویی", "available": True},
-                    "ایتالیایی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                    "ایتالیایی (نیم کیلویی)": {"price": 555000, "unit": "نیم کیلویی", "available": True},
-                    "ادویه ماکارونی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                    "ادویه ماکارونی (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
-                    "فلفل سیاه (نمکپاشی)": {"price": 220000, "unit": "نمکپاشی", "available": True},
-                    "فلفل سیاه (نیم کیلویی)": {"price": 950000, "unit": "نیم کیلویی", "available": True},
-                    "فلفل سیاه (نکوبیده قوطی 150گ)": {"price": 300000, "unit": "قوطی 150 گرم", "available": True},
-                    "دارچین (نمکپاشی)": {"price": 100000, "unit": "نمکپاشی", "available": True},
-                    "دارچین (نیم کیلویی)": {"price": 395000, "unit": "نیم کیلویی", "available": True},
-                    "دارچین (سالم 150 گ)": {"price": 150000, "unit": "قوطی 150 گرم سالم", "available": True},
-                    "پودر فلفل قرمز تند چیلی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                    "پودر فلفل قرمز تند چیلی (نیم کیلویی)": {"price": 640000, "unit": "نیم کیلویی", "available": True},
-                },
-                "ادویه جات ترکیبی گهنیج": {
-                    "ادویه مامان بلوچی (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه مامان بلوچی (پاکت نیم کیلویی)": {"price": 600000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه بریانی بلوچی (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه بریانی بلوچی (پاکت نیم کیلویی)": {"price": 435000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه عربی مخصوص (قوطی مربعی 130گ)": {"price": 370000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه عربی مخصوص (پاکت نیم کیلویی)": {"price": 1245000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه کاری مخصوص (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه کاری مخصوص (پاکت نیم کیلویی)": {"price": 480000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه ماهی و میگو (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه ماهی و میگو (پاکت نیم کیلویی)": {"price": 570000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه کباب (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه کباب (پاکت نیم کیلویی)": {"price": 470000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه کرایی بلوچی (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه کرایی بلوچی (پاکت نیم کیلویی)": {"price": 610000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه کاچی (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه کاچی (پاکت نیم کیلویی)": {"price": 500000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه کاجون (قوطی مربعی 130گ)": {"price": 170000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه کاجون (پاکت نیم کیلویی)": {"price": 480000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه مرغ (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه مرغ (نیم کیلویی پاکت)": {"price": 500000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه سمبوسه (قوطی مربعی 130گ)": {"price": 220000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه سمبوسه (پاکت نیم کیلویی)": {"price": 660000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه گراماسالا (قوطی مربعی 130گ)": {"price": 320000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه گراماسالا (پاکت نیم کیلویی)": {"price": 1035000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "ادویه فلافل (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                    "ادویه پکوره (قوطی مربعی 130گ)": {"price": 120000, "unit": "قوطی مربعی 130 گرم", "available": True},
-                },
-                "ادویه جات اصلی": {
-                    "پودر پاپریکا (قوطی مربعی)": {"price": 150000, "unit": "قوطی مربعی", "available": True},
-                    "پودر پاپریکا (پاکت نیم کیلویی)": {"price": 360000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "پودر سیر خالص (قوطی 180 گ)": {"price": 220000, "unit": "قوطی 180 گرم", "available": True},
-                    "پودر سیر خالص (پاکت نیم کیلویی)": {"price": 500000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "زیره سبز (قوطی مربعی)": {"price": 130000, "unit": "قوطی مربعی", "available": True},
-                    "زیره سبز (پاکت نیم کیلویی)": {"price": 360000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "زیره سیاه (قوطی مربعی)": {"price": 410000, "unit": "قوطی مربعی", "available": True},
-                    "زیره سیاه (پاکت نیم کیلویی)": {"price": 1330000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "زنجبیل (قوطی مربعی)": {"price": 140000, "unit": "قوطی مربعی", "available": True},
-                    "زنجبیل (پاکت نیم کیلویی)": {"price": 480000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "پودر گشنیز (قوطی مربعی)": {"price": 100000, "unit": "قوطی مربعی", "available": True},
-                    "پودر گشنیز (پاکت نیم کیلویی)": {"price": 280000, "unit": "پاکت نیم کیلویی", "available": True},
-                    "تخم گشنیز (قوطی مربعی)": {"price": 80000, "unit": "قوطی مربعی", "available": True},
-                    "تخم گشنیز (پاکت نیم کیلویی)": {"price": 280000, "unit": "پاکت نیم کیلویی", "available": True},
-                },
-                "دانه ها و تخم ها": {
-                    "دانه چیا (200 گرمی)": {"price": 190000, "unit": "قوطی 200 گرم", "available": True},
-                    "خاکشیر (200 گرمی)": {"price": 120000, "unit": "قوطی 200 گرم", "available": True},
-                    "تخم شربتی ریز": {"price": 180000, "unit": "قوطی", "available": True},
-                    "تخم شربتی درشت": {"price": 140000, "unit": "قوطی", "available": True},
-                    "سیاهدانه": {"price": 200000, "unit": "قوطی", "available": True},
-                    "بارهنگ": {"price": 160000, "unit": "قوطی", "available": True},
-                    "پاپ کورن بزرگ (800 گ)": {"price": 330000, "unit": "قوطی 800 گرم", "available": True},
-                    "اسپند": {"price": 80000, "unit": "قوطی", "available": True},
-                    "تخم زنیان": {"price": 120000, "unit": "قوطی", "available": True},
-                },
-                "طعم دهنده ها": {
-                    "آروماتز": {"price": 170000, "unit": "قوطی", "available": True},
-                    "سیر و کره": {"price": 150000, "unit": "قوطی", "available": True},
-                    "دود": {"price": 120000, "unit": "قوطی", "available": True},
-                    "قارچ و خامه": {"price": 180000, "unit": "قوطی", "available": True},
-                    "کره": {"price": 100000, "unit": "قوطی", "available": True},
-                    "لیمو فلفلی زرد": {"price": 150000, "unit": "قوطی", "available": True},
-                    "لیمو فلفلی چاشنی": {"price": 190000, "unit": "قوطی", "available": True},
-                    "پنیر چدار": {"price": 120000, "unit": "قوطی", "available": True},
-                    "پیاز جعفری": {"price": 150000, "unit": "قوطی", "available": True},
-                    "کچاپ": {"price": 150000, "unit": "قوطی", "available": True},
-                    "سماق": {"price": 200000, "unit": "قوطی", "available": True},
-                    "ادویه انبه": {"price": 150000, "unit": "قوطی", "available": True},
-                    "پودر آویشن": {"price": 200000, "unit": "قوطی", "available": True},
-                    "ادویه برگر": {"price": 150000, "unit": "قوطی", "available": True},
-                    "پودر لیمو": {"price": 110000, "unit": "قوطی", "available": True},
-                    "پودر لبو": {"price": 120000, "unit": "قوطی", "available": True},
-                    "عصاره مرغ": {"price": 120000, "unit": "قوطی", "available": True},
-                },
-                "سبزی خشک و متفرقه": {
-                    "فلفل لاهوری (کناری)": {"price": 200000, "unit": "بسته", "available": True},
-                    "نعناع خشک بزرگ": {"price": 220000, "unit": "بسته بزرگ", "available": True},
-                    "نعناع خشک متوسط": {"price": 160000, "unit": "بسته متوسط", "available": True},
-                    "شوید خشک بزرگ": {"price": 220000, "unit": "بسته بزرگ", "available": True},
-                    "شنبلیله خشک": {"price": 230000, "unit": "بسته", "available": True},
-                    "ترخون خشک": {"price": 260000, "unit": "بسته", "available": True},
-                    "رزماری خشک قوطی": {"price": 70000, "unit": "قوطی", "available": True},
-                    "برگ بو (40 گرم)": {"price": 100000, "unit": "بسته 40 گرم", "available": True},
-                    "هل اکبر بنفش (20 گرمی)": {"price": 270000, "unit": "بسته 20 گرم", "available": True},
-                    "نمک صورتی یک کیلو": {"price": 150000, "unit": "یک کیلو", "available": True},
-                    "پرک لیمو کوچک": {"price": 200000, "unit": "بسته کوچک", "available": True},
-                    "پرک لیمو بزرگ": {"price": 500000, "unit": "بسته بزرگ", "available": True},
-                    "رب انار ترش": {"price": 450000, "unit": "بسته", "available": True},
-                    "رب انار ترش متوسط": {"price": 420000, "unit": "بسته متوسط", "available": True},
-                    "آبغوره خالص": {"price": 250000, "unit": "بسته", "available": True},
-                    "غنچه گل محمدی": {"price": 300000, "unit": "بسته", "available": True},
-                    "گلرنگ (زردی) بسته 80 گ": {"price": 250000, "unit": "بسته 80 گرم", "available": True},
-                    "رب گوجه خالص خونگی 1100 گرم": {"price": 420000, "unit": "بسته 1100 گرم", "available": True},
-                },
-                "عرقیجات خالص": {
-                    "گلاب ویژه": {"price": 290000, "unit": "بطری", "available": True},
-                    "عرق نسترن": {"price": 190000, "unit": "بطری", "available": True},
-                    "عرق بهار نارنج": {"price": 220000, "unit": "بطری", "available": True},
-                    "عرق چهل گیاه": {"price": 200000, "unit": "بطری", "available": True},
-                    "عرق زنیان": {"price": 150000, "unit": "بطری", "available": True},
-                    "عرق بید مشک": {"price": 190000, "unit": "بطری", "available": True},
-                    "عرق آویشن": {"price": 150000, "unit": "بطری", "available": True},
-                    "عرق شاتره": {"price": 150000, "unit": "بطری", "available": True},
-                    "عرق رازیانه": {"price": 150000, "unit": "بطری", "available": True},
-                    "عرق شوید": {"price": 150000, "unit": "بطری", "available": True},
-                    "عرق خار مریم": {"price": 150000, "unit": "بطری", "available": True},
-                    "عرق خار شتر": {"price": 150000, "unit": "بطری", "available": True},
-                    "عرق زیره": {"price": 150000, "unit": "بطری", "available": True},
-                    "عرق کاسنی": {"price": 150000, "unit": "بطری", "available": True},
-                    "عرق طارونه": {"price": 150000, "unit": "بطری", "available": True},
-                    "معجون آرامش بخش": {"price": 270000, "unit": "بطری", "available": True},
-                    "معجون معده": {"price": 270000, "unit": "بطری", "available": True},
-                    "عرق نعناع": {"price": 220000, "unit": "بطری", "available": True},
-                },
-                "زردچوبه چارمنار": {
-                    "زردچوبه چارمنار (نیم کیلو)": {"price": 470000, "unit": "نیم کیلو", "available": True},
-                    "زردچوبه چارمنار (150 گرمی)": {"price": 180000, "unit": "150 گرمی", "available": True},
-                },
-            },
-            "orders": [],
-            "shipping_options": {
-                "پست پیشتاز": 45000,
-                "پست سفارشی": 30000,
-                "تیپاکس": 65000,
-                "پیک (تهران)": 50000
-            },
-            "card_number": "6037-XXXX-XXXX-XXXX",
-            "card_holder": "نام صاحب فروشگاه",
-            "contact_info": {
-                "phone": "09XXXXXXXXX",
-                "address": "تهران",
-                "hours": "۹ صبح تا ۹ شب"
-            },
-            "admins": list(DEFAULT_ADMIN_IDS)
-        }
+        default_data = get_default_data()
         save_data(default_data)
         return default_data
 
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    # کش رو نو کن
+    build_cache()
 
 def format_price(price):
     return f"{price:,} تومان"
@@ -268,13 +326,11 @@ def find_product(data, product_name):
     return None, None
 
 def is_admin(user_id):
-    """چک می کنه که کاربر مدیر هست یا نه"""
     data = load_data()
     admins = data.get("admins", list(DEFAULT_ADMIN_IDS))
     return user_id in admins
 
 def is_super_admin(user_id):
-    """چک می کنه که کاربر مدیر ارشد هست یا نه"""
     return user_id == SUPER_ADMIN_ID
 
 # ============ شروع ============
@@ -285,7 +341,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     welcome_text = (
         f"🌿 سلام {user.first_name} عزیز!\n\n"
-        f"به فروشگاه ادویه جات گهنیج خوش آمدید 🌶\n\n"
+        f"به فروشگاه ادویه جات گهنیج خوش آمدید 🌿\n\n"
         f"از منوی زیر انتخاب کنید:"
     )
 
@@ -314,16 +370,18 @@ async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = load_data()
     categories = data.get("categories", {})
+    build_cache()
 
     text = "🌿 دسته بندی محصولات:\n\nلطفا یک دسته را انتخاب کنید:"
     keyboard = []
 
     for cat_name in categories.keys():
         product_count = len(categories[cat_name])
+        cat_id = get_cat_id(cat_name)
         keyboard.append([
             InlineKeyboardButton(
                 f"📂 {cat_name} ({product_count} محصول)",
-                callback_data=f"cat_{cat_name}"
+                callback_data=f"cat_{cat_id}"
             )
         ])
 
@@ -338,7 +396,13 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    cat_name = query.data.replace("cat_", "")
+    cat_id = query.data.replace("cat_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
     data = load_data()
     products = data.get("categories", {}).get(cat_name, {})
 
@@ -348,10 +412,11 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for name, info in products.items():
         if info["available"]:
             text += f"▫️ {name} - {format_price(info['price'])}\n"
+            prod_id = get_prod_id(name)
             keyboard.append([
                 InlineKeyboardButton(
-                    f"🌶 {name}",
-                    callback_data=f"product_{name}"
+                    f"🌿 {name}",
+                    callback_data=f"product_{prod_id}"
                 )
             ])
 
@@ -370,7 +435,13 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    product_name = query.data.replace("product_", "")
+    prod_id = query.data.replace("product_", "")
+    product_name = get_prod_name(prod_id)
+    
+    if not product_name:
+        await query.edit_message_text("❌ محصول پیدا نشد!")
+        return MAIN_MENU
+    
     data = load_data()
     product, cat_name = find_product(data, product_name)
 
@@ -389,6 +460,7 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"تعداد مورد نظر را انتخاب کنید:"
     )
 
+    cat_id = get_cat_id(cat_name)
     keyboard = [
         [
             InlineKeyboardButton("1️⃣", callback_data="qty_1"),
@@ -400,7 +472,7 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("5️⃣", callback_data="qty_5"),
             InlineKeyboardButton("🔟", callback_data="qty_10"),
         ],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data=f"cat_{cat_name}")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data=f"cat_{cat_id}")],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -433,7 +505,7 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         f"✅ به سبد خرید اضافه شد!\n\n"
-        f"🌶 {product_name}\n"
+        f"🌿 {product_name}\n"
         f"📦 تعداد: {qty}\n"
         f"💰 قیمت: {format_price(item_total)}\n"
     )
@@ -541,14 +613,16 @@ async def get_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "📝 مرحله ۴ از ۴\n\n🚚 روش ارسال را انتخاب کنید:\n\n"
     keyboard = []
 
-    for method, cost in shipping.items():
+    for idx, (method, cost) in enumerate(shipping.items()):
         text += f"▫️ {method}: {format_price(cost)}\n"
         keyboard.append([
             InlineKeyboardButton(
                 f"🚚 {method} | {format_price(cost)}",
-                callback_data=f"ship_{method}"
+                callback_data=f"ship_{idx}"
             )
         ])
+    
+    context.user_data["shipping_list"] = list(shipping.keys())
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(text, reply_markup=reply_markup)
@@ -558,7 +632,14 @@ async def select_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    shipping_method = query.data.replace("ship_", "")
+    idx = int(query.data.replace("ship_", ""))
+    shipping_list = context.user_data.get("shipping_list", [])
+    
+    if idx >= len(shipping_list):
+        await query.edit_message_text("❌ روش ارسال معتبر نیست!")
+        return MAIN_MENU
+    
+    shipping_method = shipping_list[idx]
     context.user_data["shipping_method"] = shipping_method
 
     data = load_data()
@@ -661,7 +742,6 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔑 آیدی: {order['user_id']}"
     )
 
-    # ارسال به تمام مدیران
     admins = data.get("admins", list(DEFAULT_ADMIN_IDS))
     photo = update.message.photo[-1]
     
@@ -717,6 +797,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data["searching"] = False
         search_term = update.message.text.strip()
         data = load_data()
+        build_cache()
         
         all_products = get_all_products(data)
         results = {}
@@ -739,8 +820,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                     text += f"\n(و {len(results) - 30} مورد دیگر...)"
                     break
                 text += f"▫️ {name} - {format_price(info['price'])}\n"
+                prod_id = get_prod_id(name)
                 keyboard.append([
-                    InlineKeyboardButton(f"🌶 {name}", callback_data=f"product_{name}")
+                    InlineKeyboardButton(f"🌿 {name}", callback_data=f"product_{prod_id}")
                 ])
                 count += 1
             keyboard.append([InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_main")])
@@ -775,7 +857,6 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 آمار فروش", callback_data="admin_stats")],
     ]
     
-    # فقط مدیر ارشد میتونه مدیران رو مدیریت کنه
     if is_super_admin(update.effective_user.id):
         keyboard.append([InlineKeyboardButton("👥 مدیریت مدیران", callback_data="admin_admins")])
     
@@ -785,7 +866,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ============ مدیریت مدیران (فقط برای مدیر ارشد) ============
+# ============ مدیریت مدیران ============
 async def admin_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -860,7 +941,6 @@ async def save_new_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💡 حالا این کاربر می تواند به ربات پیام /start بدهد و دکمه ⚙️ پنل مدیریت را ببیند."
         )
         
-        # اطلاع به مدیر جدید
         try:
             await context.bot.send_message(
                 chat_id=new_admin_id,
@@ -871,11 +951,6 @@ async def save_new_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             logger.warning(f"Could not notify new admin {new_admin_id}: {e}")
-            await update.message.reply_text(
-                "⚠️ توجه: نتوانستم به مدیر جدید پیام دهم. "
-                "احتمالاً هنوز به ربات پیام نداده است. "
-                "از او بخواهید یک بار /start بزند."
-            )
 
     keyboard = [
         [InlineKeyboardButton("👥 مدیریت مدیران", callback_data="admin_admins")],
@@ -908,7 +983,6 @@ async def admin_remove_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         save_data(data)
         text = f"✅ مدیر {admin_id_to_remove} حذف شد!"
         
-        # اطلاع به مدیر حذف شده
         try:
             await context.bot.send_message(
                 chat_id=admin_id_to_remove,
@@ -933,14 +1007,16 @@ async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = load_data()
+    build_cache()
     text = "💰 ویرایش قیمت ها\n\nابتدا دسته را انتخاب کنید:"
     keyboard = []
 
     for cat_name in data.get("categories", {}).keys():
+        cat_id = get_cat_id(cat_name)
         keyboard.append([
             InlineKeyboardButton(
                 f"📂 {cat_name}",
-                callback_data=f"adminprice_cat_{cat_name}"
+                callback_data=f"apc_{cat_id}"
             )
         ])
 
@@ -953,7 +1029,13 @@ async def admin_price_category(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
 
-    cat_name = query.data.replace("adminprice_cat_", "")
+    cat_id = query.data.replace("apc_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
     data = load_data()
     products = data.get("categories", {}).get(cat_name, {})
 
@@ -962,10 +1044,11 @@ async def admin_price_category(update: Update, context: ContextTypes.DEFAULT_TYP
 
     for name, info in products.items():
         text += f"▫️ {name}: {format_price(info['price'])}\n"
+        prod_id = get_prod_id(name)
         keyboard.append([
             InlineKeyboardButton(
                 f"✏️ {name}",
-                callback_data=f"editprice_{name}"
+                callback_data=f"ep_{prod_id}"
             )
         ])
 
@@ -982,7 +1065,13 @@ async def admin_select_for_price(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
 
-    product_name = query.data.replace("editprice_", "")
+    prod_id = query.data.replace("ep_", "")
+    product_name = get_prod_name(prod_id)
+    
+    if not product_name:
+        await query.edit_message_text("❌ محصول پیدا نشد!")
+        return MAIN_MENU
+    
     context.user_data["editing_product"] = product_name
 
     data = load_data()
@@ -994,7 +1083,7 @@ async def admin_select_for_price(update: Update, context: ContextTypes.DEFAULT_T
 
     await query.edit_message_text(
         f"✏️ ویرایش قیمت\n\n"
-        f"🌶 {product_name}\n"
+        f"🌿 {product_name}\n"
         f"💰 قیمت فعلی: {format_price(product['price'])}\n\n"
         f"لطفا قیمت جدید را به تومان وارد کنید:\n(فقط عدد، مثلا: 150000)"
     )
@@ -1019,7 +1108,7 @@ async def save_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(
                 f"✅ قیمت با موفقیت تغییر کرد!\n\n"
-                f"🌶 {product_name}\n"
+                f"🌿 {product_name}\n"
                 f"💰 قبلی: {format_price(old_price)}\n"
                 f"💰 جدید: {format_price(new_price)}"
             )
@@ -1044,12 +1133,14 @@ async def admin_add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = load_data()
+    build_cache()
     text = "➕ افزودن محصول جدید\n\nابتدا دسته را انتخاب کنید:"
     keyboard = []
 
     for cat_name in data.get("categories", {}).keys():
+        cat_id = get_cat_id(cat_name)
         keyboard.append([
-            InlineKeyboardButton(f"📂 {cat_name}", callback_data=f"addcat_{cat_name}")
+            InlineKeyboardButton(f"📂 {cat_name}", callback_data=f"ac_{cat_id}")
         ])
 
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
@@ -1061,7 +1152,13 @@ async def admin_select_cat_for_add(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     await query.answer()
 
-    cat_name = query.data.replace("addcat_", "")
+    cat_id = query.data.replace("ac_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
     context.user_data["adding_category"] = cat_name
 
     await query.edit_message_text(
@@ -1107,7 +1204,7 @@ async def get_product_unit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ محصول اضافه شد!\n\n"
         f"📂 دسته: {cat_name}\n"
-        f"🌶 نام: {name}\n"
+        f"🌿 نام: {name}\n"
         f"💰 قیمت: {format_price(price)}\n"
         f"📦 بسته: {unit}"
     )
@@ -1126,12 +1223,14 @@ async def admin_remove_product(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
 
     data = load_data()
+    build_cache()
     text = "➖ حذف محصول\n\nابتدا دسته را انتخاب کنید:"
     keyboard = []
 
     for cat_name in data.get("categories", {}).keys():
+        cat_id = get_cat_id(cat_name)
         keyboard.append([
-            InlineKeyboardButton(f"📂 {cat_name}", callback_data=f"rmcat_{cat_name}")
+            InlineKeyboardButton(f"📂 {cat_name}", callback_data=f"rc_{cat_id}")
         ])
 
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
@@ -1143,7 +1242,13 @@ async def admin_remove_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    cat_name = query.data.replace("rmcat_", "")
+    cat_id = query.data.replace("rc_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
     data = load_data()
     products = data.get("categories", {}).get(cat_name, {})
 
@@ -1151,7 +1256,8 @@ async def admin_remove_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
 
     for name in products:
-        keyboard.append([InlineKeyboardButton(f"🗑 {name}", callback_data=f"remove_{name}")])
+        prod_id = get_prod_id(name)
+        keyboard.append([InlineKeyboardButton(f"🗑 {name}", callback_data=f"rp_{prod_id}")])
 
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_remove")])
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1162,7 +1268,13 @@ async def confirm_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    product_name = query.data.replace("remove_", "")
+    prod_id = query.data.replace("rp_", "")
+    product_name = get_prod_name(prod_id)
+    
+    if not product_name:
+        await query.edit_message_text("❌ محصول پیدا نشد!")
+        return MAIN_MENU
+    
     data = load_data()
     
     removed = False
@@ -1197,20 +1309,24 @@ async def admin_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "📦 مدیریت هزینه ارسال\n\nروش های ارسال فعلی:\n\n"
     keyboard = []
 
-    for method, cost in shipping.items():
+    shipping_list = list(shipping.keys())
+    context.user_data["admin_shipping_list"] = shipping_list
+
+    for idx, method in enumerate(shipping_list):
+        cost = shipping[method]
         text += f"▫️ {method}: {format_price(cost)}\n"
         keyboard.append([
             InlineKeyboardButton(
                 f"✏️ ویرایش {method}",
-                callback_data=f"editship_{method}"
+                callback_data=f"es_{idx}"
             ),
             InlineKeyboardButton(
                 f"🗑 حذف",
-                callback_data=f"rmship_{method}"
+                callback_data=f"rs_{idx}"
             )
         ])
 
-    keyboard.append([InlineKeyboardButton("➕ افزودن روش جدید", callback_data="addship_new")])
+    keyboard.append([InlineKeyboardButton("➕ افزودن روش جدید", callback_data="as_new")])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1221,7 +1337,14 @@ async def admin_edit_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
 
-    method = query.data.replace("editship_", "")
+    idx = int(query.data.replace("es_", ""))
+    shipping_list = context.user_data.get("admin_shipping_list", [])
+    
+    if idx >= len(shipping_list):
+        await query.edit_message_text("❌ روش پیدا نشد!")
+        return MAIN_MENU
+    
+    method = shipping_list[idx]
     context.user_data["editing_shipping"] = method
 
     data = load_data()
@@ -1269,7 +1392,14 @@ async def admin_remove_shipping(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
 
-    method = query.data.replace("rmship_", "")
+    idx = int(query.data.replace("rs_", ""))
+    shipping_list = context.user_data.get("admin_shipping_list", [])
+    
+    if idx >= len(shipping_list):
+        await query.edit_message_text("❌ روش پیدا نشد!")
+        return MAIN_MENU
+    
+    method = shipping_list[idx]
     data = load_data()
 
     if method in data["shipping_options"]:
@@ -1620,7 +1750,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📦 تعداد سفارشات: {len(orders)}\n"
         f"💰 مجموع فروش: {format_price(sum(o.get('grand_total', 0) for o in orders))}\n"
         f"📂 تعداد دسته ها: {total_categories}\n"
-        f"🌶 تعداد کل محصولات: {total_products}\n"
+        f"🌿 تعداد کل محصولات: {total_products}\n"
         f"🚚 تعداد روش های ارسال: {len(data.get('shipping_options', {}))}\n"
         f"👥 تعداد مدیران: {len(admins)}"
     )
@@ -1645,7 +1775,10 @@ def main():
     health_thread.start()
     logger.info(f"Health server on port {PORT}")
     logger.info(f"Super Admin ID: {SUPER_ADMIN_ID}")
-    logger.info(f"Default Admins: {DEFAULT_ADMIN_IDS}")
+    
+    # کش اولیه
+    load_data()
+    build_cache()
 
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -1664,17 +1797,17 @@ def main():
                 CallbackQueryHandler(search_start, pattern="^search$"),
                 CallbackQueryHandler(admin_panel, pattern="^admin$"),
                 CallbackQueryHandler(admin_prices, pattern="^admin_prices$"),
-                CallbackQueryHandler(admin_price_category, pattern="^adminprice_cat_"),
-                CallbackQueryHandler(admin_select_for_price, pattern="^editprice_"),
+                CallbackQueryHandler(admin_price_category, pattern="^apc_"),
+                CallbackQueryHandler(admin_select_for_price, pattern="^ep_"),
                 CallbackQueryHandler(admin_add_product, pattern="^admin_add$"),
-                CallbackQueryHandler(admin_select_cat_for_add, pattern="^addcat_"),
+                CallbackQueryHandler(admin_select_cat_for_add, pattern="^ac_"),
                 CallbackQueryHandler(admin_remove_product, pattern="^admin_remove$"),
-                CallbackQueryHandler(admin_remove_cat, pattern="^rmcat_"),
-                CallbackQueryHandler(confirm_remove, pattern="^remove_"),
+                CallbackQueryHandler(admin_remove_cat, pattern="^rc_"),
+                CallbackQueryHandler(confirm_remove, pattern="^rp_"),
                 CallbackQueryHandler(admin_shipping, pattern="^admin_shipping$"),
-                CallbackQueryHandler(admin_edit_shipping, pattern="^editship_"),
-                CallbackQueryHandler(admin_remove_shipping, pattern="^rmship_"),
-                CallbackQueryHandler(admin_add_shipping, pattern="^addship_new$"),
+                CallbackQueryHandler(admin_edit_shipping, pattern="^es_"),
+                CallbackQueryHandler(admin_remove_shipping, pattern="^rs_"),
+                CallbackQueryHandler(admin_add_shipping, pattern="^as_new$"),
                 CallbackQueryHandler(admin_payment, pattern="^admin_payment$"),
                 CallbackQueryHandler(admin_edit_card_number, pattern="^editcard_number$"),
                 CallbackQueryHandler(admin_edit_card_holder, pattern="^editcard_holder$"),
