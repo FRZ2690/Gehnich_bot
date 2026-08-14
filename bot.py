@@ -2,6 +2,7 @@ import logging
 import json
 import os
 import hashlib
+from collections import OrderedDict
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
 )
@@ -28,6 +29,30 @@ SUPER_ADMIN_ID = DEFAULT_ADMIN_IDS[0] if DEFAULT_ADMIN_IDS else 0
 
 DATA_FILE = "data.json"
 PORT = int(os.environ.get("PORT", 10000))
+
+# استیکرهای پیشفرض دسته ها
+DEFAULT_CAT_ICONS = {
+    "ادویه جات ترکیبی گهنیج": "🔬",
+    "چاشنی های گهنیج": "🧂",
+    "ادویه جات اصلی": "🌿",
+    "دانه ها و تخم ها": "🌰",
+    "طعم دهنده ها": "🍋",
+    "سبزی خشک و متفرقه": "🥬",
+    "عرقیجات خالص": "🌸",
+    "زردچوبه چارمنار": "💛",
+}
+
+# ترتیب پیشفرض دسته ها
+DEFAULT_CAT_ORDER = [
+    "ادویه جات ترکیبی گهنیج",
+    "چاشنی های گهنیج",
+    "ادویه جات اصلی",
+    "دانه ها و تخم ها",
+    "طعم دهنده ها",
+    "سبزی خشک و متفرقه",
+    "عرقیجات خالص",
+    "زردچوبه چارمنار",
+]
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -57,22 +82,22 @@ def run_health_server():
     ADMIN_NEW_SHIPPING_PRICE, ADMIN_ADD_SHIPPING_NAME, ADMIN_ADD_SHIPPING_PRICE,
     ADMIN_NEW_CARD_NUMBER, ADMIN_NEW_CARD_HOLDER,
     ADMIN_NEW_PHONE, ADMIN_NEW_ADDRESS, ADMIN_NEW_HOURS,
-    ADMIN_ADD_NEW_ADMIN_ID
-) = range(19)
+    ADMIN_ADD_NEW_ADMIN_ID,
+    ADMIN_ADD_CAT_NAME, ADMIN_ADD_CAT_ICON,
+    ADMIN_EDIT_CAT_NAME, ADMIN_EDIT_CAT_ICON
+) = range(23)
 
-# ============ کش برای map کردن id به اسم ============
+# ============ کش ============
 _id_to_name_cache = {}
 _name_to_id_cache = {}
 _id_to_cat_cache = {}
 _cat_to_id_cache = {}
 
 def get_short_id(name, prefix=""):
-    """یک id کوتاه از هش نام تولید می کنه"""
     h = hashlib.md5((prefix + name).encode('utf-8')).hexdigest()[:10]
     return h
 
 def build_cache():
-    """کش رو از دیتا میسازه"""
     global _id_to_name_cache, _name_to_id_cache, _id_to_cat_cache, _cat_to_id_cache
     _id_to_name_cache = {}
     _name_to_id_cache = {}
@@ -110,9 +135,24 @@ def get_prod_name(prod_id):
         build_cache()
     return _id_to_name_cache.get(prod_id, "")
 
+def get_cat_icon(data, cat_name):
+    icons = data.get("cat_icons", DEFAULT_CAT_ICONS)
+    return icons.get(cat_name, "📂")
+
+def get_ordered_categories(data):
+    cat_order = data.get("cat_order", DEFAULT_CAT_ORDER)
+    categories = data.get("categories", {})
+    ordered = []
+    for cat_name in cat_order:
+        if cat_name in categories:
+            ordered.append(cat_name)
+    for cat_name in categories:
+        if cat_name not in ordered:
+            ordered.append(cat_name)
+    return ordered
+
 # ============ دیتابیس ============
 def load_data_raw():
-    """بدون کش سازی"""
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -121,31 +161,6 @@ def load_data_raw():
 def get_default_data():
     return {
         "categories": {
-            "چاشنی های گهنیج": {
-                "پودر لیمو عمانی (نمکپاشی)": {"price": 110000, "unit": "نمکپاشی", "available": True},
-                "چاشنی ماست (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
-                "چاشنی ماست (نیم کیلویی)": {"price": 475000, "unit": "نیم کیلویی", "available": True},
-                "ادویه سوسیس بندری (قوطی مربعی)": {"price": 200000, "unit": "قوطی مربعی", "available": True},
-                "ادویه سوسیس بندری (نیم کیلویی)": {"price": 590000, "unit": "نیم کیلویی", "available": True},
-                "چاشنی زعتر (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                "چاشنی زعتر (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
-                "چاشنی املت (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
-                "چاشنی املت (نیم کیلویی)": {"price": 300000, "unit": "نیم کیلویی", "available": True},
-                "چاشنی سیب زمینی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                "چاشنی سیب زمینی (نیم کیلویی)": {"price": 460000, "unit": "نیم کیلویی", "available": True},
-                "ایتالیایی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                "ایتالیایی (نیم کیلویی)": {"price": 555000, "unit": "نیم کیلویی", "available": True},
-                "ادویه ماکارونی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                "ادویه ماکارونی (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
-                "فلفل سیاه (نمکپاشی)": {"price": 220000, "unit": "نمکپاشی", "available": True},
-                "فلفل سیاه (نیم کیلویی)": {"price": 950000, "unit": "نیم کیلویی", "available": True},
-                "فلفل سیاه (نکوبیده قوطی 150گ)": {"price": 300000, "unit": "قوطی 150 گرم", "available": True},
-                "دارچین (نمکپاشی)": {"price": 100000, "unit": "نمکپاشی", "available": True},
-                "دارچین (نیم کیلویی)": {"price": 395000, "unit": "نیم کیلویی", "available": True},
-                "دارچین (سالم 150 گ)": {"price": 150000, "unit": "قوطی 150 گرم سالم", "available": True},
-                "پودر فلفل قرمز تند چیلی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
-                "پودر فلفل قرمز تند چیلی (نیم کیلویی)": {"price": 640000, "unit": "نیم کیلویی", "available": True},
-            },
             "ادویه جات ترکیبی گهنیج": {
                 "ادویه مامان بلوچی (قوطی مربعی 130گ)": {"price": 200000, "unit": "قوطی مربعی 130 گرم", "available": True},
                 "ادویه مامان بلوچی (پاکت نیم کیلویی)": {"price": 600000, "unit": "پاکت نیم کیلویی", "available": True},
@@ -173,6 +188,31 @@ def get_default_data():
                 "ادویه گراماسالا (پاکت نیم کیلویی)": {"price": 1035000, "unit": "پاکت نیم کیلویی", "available": True},
                 "ادویه فلافل (قوطی مربعی 130گ)": {"price": 180000, "unit": "قوطی مربعی 130 گرم", "available": True},
                 "ادویه پکوره (قوطی مربعی 130گ)": {"price": 120000, "unit": "قوطی مربعی 130 گرم", "available": True},
+            },
+            "چاشنی های گهنیج": {
+                "پودر لیمو عمانی (نمکپاشی)": {"price": 110000, "unit": "نمکپاشی", "available": True},
+                "چاشنی ماست (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
+                "چاشنی ماست (نیم کیلویی)": {"price": 475000, "unit": "نیم کیلویی", "available": True},
+                "ادویه سوسیس بندری (قوطی مربعی)": {"price": 200000, "unit": "قوطی مربعی", "available": True},
+                "ادویه سوسیس بندری (نیم کیلویی)": {"price": 590000, "unit": "نیم کیلویی", "available": True},
+                "چاشنی زعتر (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "چاشنی زعتر (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
+                "چاشنی املت (نمکپاشی)": {"price": 120000, "unit": "نمکپاشی", "available": True},
+                "چاشنی املت (نیم کیلویی)": {"price": 300000, "unit": "نیم کیلویی", "available": True},
+                "چاشنی سیب زمینی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "چاشنی سیب زمینی (نیم کیلویی)": {"price": 460000, "unit": "نیم کیلویی", "available": True},
+                "ایتالیایی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "ایتالیایی (نیم کیلویی)": {"price": 555000, "unit": "نیم کیلویی", "available": True},
+                "ادویه ماکارونی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "ادویه ماکارونی (نیم کیلویی)": {"price": 490000, "unit": "نیم کیلویی", "available": True},
+                "فلفل سیاه (نمکپاشی)": {"price": 220000, "unit": "نمکپاشی", "available": True},
+                "فلفل سیاه (نیم کیلویی)": {"price": 950000, "unit": "نیم کیلویی", "available": True},
+                "فلفل سیاه (نکوبیده قوطی 150گ)": {"price": 300000, "unit": "قوطی 150 گرم", "available": True},
+                "دارچین (نمکپاشی)": {"price": 100000, "unit": "نمکپاشی", "available": True},
+                "دارچین (نیم کیلویی)": {"price": 395000, "unit": "نیم کیلویی", "available": True},
+                "دارچین (سالم 150 گ)": {"price": 150000, "unit": "قوطی 150 گرم سالم", "available": True},
+                "پودر فلفل قرمز تند چیلی (نمکپاشی)": {"price": 150000, "unit": "نمکپاشی", "available": True},
+                "پودر فلفل قرمز تند چیلی (نیم کیلویی)": {"price": 640000, "unit": "نیم کیلویی", "available": True},
             },
             "ادویه جات اصلی": {
                 "پودر پاپریکا (قوطی مربعی)": {"price": 150000, "unit": "قوطی مربعی", "available": True},
@@ -279,10 +319,11 @@ def get_default_data():
             "address": "تهران",
             "hours": "۹ صبح تا ۹ شب"
         },
-        "admins": list(DEFAULT_ADMIN_IDS)
+        "admins": list(DEFAULT_ADMIN_IDS),
+        "cat_icons": dict(DEFAULT_CAT_ICONS),
+        "cat_order": list(DEFAULT_CAT_ORDER)
     }
-
-def load_data():
+    def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -296,6 +337,10 @@ def load_data():
                 data["admins"] = list(DEFAULT_ADMIN_IDS)
             if SUPER_ADMIN_ID not in data["admins"]:
                 data["admins"].append(SUPER_ADMIN_ID)
+            if "cat_icons" not in data:
+                data["cat_icons"] = dict(DEFAULT_CAT_ICONS)
+            if "cat_order" not in data:
+                data["cat_order"] = list(DEFAULT_CAT_ORDER)
             save_data(data)
             return data
     else:
@@ -306,7 +351,6 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    # کش رو نو کن
     build_cache()
 
 def format_price(price):
@@ -363,30 +407,46 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ============ نمایش دسته بندی ها ============
+# ============ نمایش دسته بندی ها (دو ستونه با کادر سبز) ============
 async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     data = load_data()
-    categories = data.get("categories", {})
     build_cache()
 
-    text = "🌿 دسته بندی محصولات:\n\nلطفا یک دسته را انتخاب کنید:"
+    text = (
+        "🟢━━━━━━━━━━━━━━━━━━🟢\n"
+        "🌿  فروشگاه ادویه گهنیج  🌿\n"
+        "🟢━━━━━━━━━━━━━━━━━━🟢\n\n"
+        "📂 دسته بندی محصولات:\n\n"
+        "لطفا یک دسته را انتخاب کنید:\n\n"
+        "🟢━━━━━━━━━━━━━━━━━━🟢"
+    )
+    
     keyboard = []
-
-    for cat_name in categories.keys():
-        product_count = len(categories[cat_name])
+    ordered_cats = get_ordered_categories(data)
+    
+    # دو ستونه
+    row = []
+    for i, cat_name in enumerate(ordered_cats):
+        product_count = len(data["categories"][cat_name])
         cat_id = get_cat_id(cat_name)
-        keyboard.append([
-            InlineKeyboardButton(
-                f"📂 {cat_name} ({product_count} محصول)",
-                callback_data=f"cat_{cat_id}"
-            )
-        ])
+        icon = get_cat_icon(data, cat_name)
+        
+        button_text = f"{icon} {cat_name}"
+        row.append(InlineKeyboardButton(button_text, callback_data=f"cat_{cat_id}"))
+        
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    
+    if row:
+        keyboard.append(row)
 
-    keyboard.append([InlineKeyboardButton("🛍 سبد خرید", callback_data="cart")])
-    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_main")])
+    # سبد خرید در وسط و پایین
+    keyboard.append([InlineKeyboardButton("       🛍 سبد خرید       ", callback_data="cart")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="back_main")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text, reply_markup=reply_markup)
@@ -405,8 +465,9 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     data = load_data()
     products = data.get("categories", {}).get(cat_name, {})
+    icon = get_cat_icon(data, cat_name)
 
-    text = f"📂 {cat_name}\n\n"
+    text = f"🟢━━━━━━━━━━━━━━━━━━🟢\n{icon} {cat_name}\n🟢━━━━━━━━━━━━━━━━━━🟢\n\n"
     keyboard = []
 
     for name, info in products.items():
@@ -850,6 +911,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 ویرایش قیمت محصولات", callback_data="admin_prices")],
         [InlineKeyboardButton("➕ افزودن محصول", callback_data="admin_add")],
         [InlineKeyboardButton("➖ حذف محصول", callback_data="admin_remove")],
+        [InlineKeyboardButton("📂 مدیریت دسته بندی ها", callback_data="admin_cats")],
         [InlineKeyboardButton("📦 مدیریت هزینه ارسال", callback_data="admin_shipping")],
         [InlineKeyboardButton("💳 مدیریت اطلاعات پرداخت", callback_data="admin_payment")],
         [InlineKeyboardButton("📞 مدیریت اطلاعات تماس", callback_data="admin_contact")],
@@ -862,6 +924,392 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_main")])
 
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+# ============ مدیریت دسته بندی ها ============
+async def admin_cats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    build_cache()
+    ordered_cats = get_ordered_categories(data)
+
+    text = "📂 مدیریت دسته بندی ها\n\nدسته های فعلی:\n\n"
+    keyboard = []
+
+    for i, cat_name in enumerate(ordered_cats):
+        icon = get_cat_icon(data, cat_name)
+        product_count = len(data["categories"][cat_name])
+        text += f"{i+1}. {icon} {cat_name} ({product_count} محصول)\n"
+        cat_id = get_cat_id(cat_name)
+        
+        # ردیف اول: نام دسته
+        keyboard.append([
+            InlineKeyboardButton(f"{icon} {cat_name}", callback_data=f"catmnu_{cat_id}")
+        ])
+
+    keyboard.append([InlineKeyboardButton("➕ افزودن دسته جدید", callback_data="addcat_new")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_cat_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_id = query.data.replace("catmnu_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
+    data = load_data()
+    icon = get_cat_icon(data, cat_name)
+    ordered_cats = get_ordered_categories(data)
+    idx = ordered_cats.index(cat_name) if cat_name in ordered_cats else -1
+    
+    context.user_data["managing_cat"] = cat_name
+
+    text = (
+        f"📂 مدیریت دسته:\n\n"
+        f"{icon} {cat_name}\n"
+        f"موقعیت فعلی: {idx + 1} از {len(ordered_cats)}\n\n"
+        f"چه کاری می خواهید انجام دهید؟"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("✏️ ویرایش نام دسته", callback_data=f"ecn_{cat_id}")],
+        [InlineKeyboardButton("🎨 ویرایش استیکر", callback_data=f"eci_{cat_id}")],
+    ]
+    
+    # دکمه های جابجایی ترتیب
+    move_row = []
+    if idx > 0:
+        move_row.append(InlineKeyboardButton("⬆️ بالا", callback_data=f"cmup_{cat_id}"))
+    if idx < len(ordered_cats) - 1:
+        move_row.append(InlineKeyboardButton("⬇️ پایین", callback_data=f"cmdn_{cat_id}"))
+    if move_row:
+        keyboard.append(move_row)
+    
+    keyboard.append([InlineKeyboardButton("🗑 حذف دسته", callback_data=f"dcat_{cat_id}")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_cats")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+# جابجایی به بالا
+async def admin_cat_move_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_id = query.data.replace("cmup_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
+    data = load_data()
+    ordered_cats = get_ordered_categories(data)
+    
+    if cat_name in ordered_cats:
+        idx = ordered_cats.index(cat_name)
+        if idx > 0:
+            ordered_cats[idx], ordered_cats[idx-1] = ordered_cats[idx-1], ordered_cats[idx]
+            data["cat_order"] = ordered_cats
+            save_data(data)
+    
+    # برگشت به منوی دسته
+    return await admin_cat_menu(update, context)
+
+# جابجایی به پایین
+async def admin_cat_move_down(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_id = query.data.replace("cmdn_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
+    data = load_data()
+    ordered_cats = get_ordered_categories(data)
+    
+    if cat_name in ordered_cats:
+        idx = ordered_cats.index(cat_name)
+        if idx < len(ordered_cats) - 1:
+            ordered_cats[idx], ordered_cats[idx+1] = ordered_cats[idx+1], ordered_cats[idx]
+            data["cat_order"] = ordered_cats
+            save_data(data)
+    
+    return await admin_cat_menu(update, context)
+
+# ویرایش نام دسته
+async def admin_edit_cat_name_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_id = query.data.replace("ecn_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
+    context.user_data["editing_cat_name"] = cat_name
+    
+    await query.edit_message_text(
+        f"✏️ ویرایش نام دسته\n\n"
+        f"نام فعلی: {cat_name}\n\n"
+        f"لطفا نام جدید دسته را وارد کنید:"
+    )
+    return ADMIN_EDIT_CAT_NAME
+
+async def save_edited_cat_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_name = update.message.text.strip()
+    old_name = context.user_data.get("editing_cat_name")
+    
+    if not old_name:
+        await update.message.reply_text("❌ خطا!")
+        return MAIN_MENU
+    
+    data = load_data()
+    
+    if new_name in data.get("categories", {}) and new_name != old_name:
+        await update.message.reply_text(f"⚠️ دسته ای با نام «{new_name}» از قبل وجود دارد!")
+        return MAIN_MENU
+    
+    if old_name in data.get("categories", {}):
+        # جابجایی محصولات به نام جدید
+        products = data["categories"][old_name]
+        # حفظ ترتیب
+        new_categories = OrderedDict()
+        for k, v in data["categories"].items():
+            if k == old_name:
+                new_categories[new_name] = products
+            else:
+                new_categories[k] = v
+        data["categories"] = dict(new_categories)
+        
+        # آپدیت آیکون
+        if "cat_icons" in data and old_name in data["cat_icons"]:
+            icon = data["cat_icons"][old_name]
+            del data["cat_icons"][old_name]
+            data["cat_icons"][new_name] = icon
+        
+        # آپدیت ترتیب
+        if "cat_order" in data:
+            data["cat_order"] = [new_name if x == old_name else x for x in data["cat_order"]]
+        
+        save_data(data)
+        
+        await update.message.reply_text(
+            f"✅ نام دسته تغییر کرد!\n\n"
+            f"از: {old_name}\n"
+            f"به: {new_name}"
+        )
+    
+    keyboard = [
+        [InlineKeyboardButton("📂 مدیریت دسته ها", callback_data="admin_cats")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+# ویرایش استیکر دسته
+async def admin_edit_cat_icon_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_id = query.data.replace("eci_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
+    data = load_data()
+    current_icon = get_cat_icon(data, cat_name)
+    context.user_data["editing_cat_icon"] = cat_name
+    
+    await query.edit_message_text(
+        f"🎨 ویرایش استیکر دسته\n\n"
+        f"دسته: {cat_name}\n"
+        f"استیکر فعلی: {current_icon}\n\n"
+        f"لطفا استیکر (ایموجی) جدید را ارسال کنید:\n"
+        f"مثال: 🧂 🔬 🌿 🌰 🍋 🥬 🌸 💛 🌶 🍃 🌱"
+    )
+    return ADMIN_EDIT_CAT_ICON
+
+async def save_edited_cat_icon(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_icon = update.message.text.strip()
+    cat_name = context.user_data.get("editing_cat_icon")
+    
+    if not cat_name:
+        await update.message.reply_text("❌ خطا!")
+        return MAIN_MENU
+    
+    data = load_data()
+    if "cat_icons" not in data:
+        data["cat_icons"] = {}
+    
+    old_icon = data["cat_icons"].get(cat_name, "📂")
+    data["cat_icons"][cat_name] = new_icon
+    save_data(data)
+    
+    await update.message.reply_text(
+        f"✅ استیکر تغییر کرد!\n\n"
+        f"دسته: {cat_name}\n"
+        f"از: {old_icon}\n"
+        f"به: {new_icon}"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("📂 مدیریت دسته ها", callback_data="admin_cats")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+# افزودن دسته جدید
+async def admin_add_cat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    await query.edit_message_text(
+        "➕ افزودن دسته جدید\n\n"
+        "لطفا نام دسته جدید را وارد کنید:"
+    )
+    return ADMIN_ADD_CAT_NAME
+
+async def get_new_cat_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cat_name = update.message.text.strip()
+    data = load_data()
+    
+    if cat_name in data.get("categories", {}):
+        await update.message.reply_text(f"⚠️ دسته «{cat_name}» از قبل وجود دارد!")
+        return ADMIN_ADD_CAT_NAME
+    
+    context.user_data["new_cat_name"] = cat_name
+    
+    await update.message.reply_text(
+        f"✅ نام: {cat_name}\n\n"
+        f"لطفا یک استیکر (ایموجی) برای این دسته وارد کنید:\n"
+        f"مثال: 🧂 🔬 🌿 🌰 🍋 🥬 🌸 💛"
+    )
+    return ADMIN_ADD_CAT_ICON
+
+async def save_new_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    icon = update.message.text.strip()
+    cat_name = context.user_data.get("new_cat_name")
+    
+    if not cat_name:
+        await update.message.reply_text("❌ خطا!")
+        return MAIN_MENU
+    
+    data = load_data()
+    if "categories" not in data:
+        data["categories"] = {}
+    if "cat_icons" not in data:
+        data["cat_icons"] = {}
+    if "cat_order" not in data:
+        data["cat_order"] = []
+    
+    data["categories"][cat_name] = {}
+    data["cat_icons"][cat_name] = icon
+    if cat_name not in data["cat_order"]:
+        data["cat_order"].append(cat_name)
+    
+    save_data(data)
+    
+    await update.message.reply_text(
+        f"✅ دسته جدید اضافه شد!\n\n"
+        f"{icon} {cat_name}\n\n"
+        f"حالا می توانید به این دسته محصول اضافه کنید."
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("📂 مدیریت دسته ها", callback_data="admin_cats")],
+        [InlineKeyboardButton("➕ افزودن محصول به این دسته", callback_data="admin_add")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+# حذف دسته
+async def admin_delete_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_id = query.data.replace("dcat_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
+    data = load_data()
+    product_count = len(data["categories"].get(cat_name, {}))
+    
+    if product_count > 0:
+        text = (
+            f"⚠️ هشدار!\n\n"
+            f"دسته «{cat_name}» شامل {product_count} محصول است.\n"
+            f"با حذف دسته، تمام محصولات هم حذف می شوند!\n\n"
+            f"آیا مطمئن هستید؟"
+        )
+        keyboard = [
+            [InlineKeyboardButton("✅ بله، حذف کن", callback_data=f"cdel_{cat_id}")],
+            [InlineKeyboardButton("❌ خیر، انصراف", callback_data="admin_cats")],
+        ]
+    else:
+        # اگر دسته خالی است، مستقیم حذف کن
+        return await admin_confirm_delete_cat(update, context)
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_confirm_delete_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    cat_id = query.data.replace("cdel_", "").replace("dcat_", "")
+    cat_name = get_cat_name(cat_id)
+    
+    if not cat_name:
+        await query.edit_message_text("❌ دسته پیدا نشد!")
+        return MAIN_MENU
+    
+    data = load_data()
+    
+    if cat_name in data.get("categories", {}):
+        del data["categories"][cat_name]
+        if "cat_icons" in data and cat_name in data["cat_icons"]:
+            del data["cat_icons"][cat_name]
+        if "cat_order" in data and cat_name in data["cat_order"]:
+            data["cat_order"].remove(cat_name)
+        save_data(data)
+        text = f"✅ دسته «{cat_name}» و تمام محصولاتش حذف شد!"
+    else:
+        text = "❌ دسته پیدا نشد!"
+    
+    keyboard = [
+        [InlineKeyboardButton("📂 مدیریت دسته ها", callback_data="admin_cats")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
@@ -1011,11 +1459,12 @@ async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "💰 ویرایش قیمت ها\n\nابتدا دسته را انتخاب کنید:"
     keyboard = []
 
-    for cat_name in data.get("categories", {}).keys():
+    for cat_name in get_ordered_categories(data):
         cat_id = get_cat_id(cat_name)
+        icon = get_cat_icon(data, cat_name)
         keyboard.append([
             InlineKeyboardButton(
-                f"📂 {cat_name}",
+                f"{icon} {cat_name}",
                 callback_data=f"apc_{cat_id}"
             )
         ])
@@ -1137,10 +1586,11 @@ async def admin_add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "➕ افزودن محصول جدید\n\nابتدا دسته را انتخاب کنید:"
     keyboard = []
 
-    for cat_name in data.get("categories", {}).keys():
+    for cat_name in get_ordered_categories(data):
         cat_id = get_cat_id(cat_name)
+        icon = get_cat_icon(data, cat_name)
         keyboard.append([
-            InlineKeyboardButton(f"📂 {cat_name}", callback_data=f"ac_{cat_id}")
+            InlineKeyboardButton(f"{icon} {cat_name}", callback_data=f"ac_{cat_id}")
         ])
 
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
@@ -1227,10 +1677,11 @@ async def admin_remove_product(update: Update, context: ContextTypes.DEFAULT_TYP
     text = "➖ حذف محصول\n\nابتدا دسته را انتخاب کنید:"
     keyboard = []
 
-    for cat_name in data.get("categories", {}).keys():
+    for cat_name in get_ordered_categories(data):
         cat_id = get_cat_id(cat_name)
+        icon = get_cat_icon(data, cat_name)
         keyboard.append([
-            InlineKeyboardButton(f"📂 {cat_name}", callback_data=f"rc_{cat_id}")
+            InlineKeyboardButton(f"{icon} {cat_name}", callback_data=f"rc_{cat_id}")
         ])
 
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin")])
@@ -1493,23 +1944,17 @@ async def admin_edit_card_number(update: Update, context: ContextTypes.DEFAULT_T
     await query.edit_message_text(
         f"💳 ویرایش شماره کارت\n\n"
         f"شماره کارت فعلی:\n{data.get('card_number', 'تنظیم نشده')}\n\n"
-        f"لطفا شماره کارت جدید را وارد کنید:\n"
-        f"(مثلا: 6037-9977-1234-5678 یا 6037997712345678)"
+        f"لطفا شماره کارت جدید را وارد کنید:"
     )
     return ADMIN_NEW_CARD_NUMBER
 
 async def save_card_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_card = update.message.text.strip()
     data = load_data()
-    old_card = data.get("card_number", "تنظیم نشده")
     data["card_number"] = new_card
     save_data(data)
 
-    await update.message.reply_text(
-        f"✅ شماره کارت تغییر کرد!\n\n"
-        f"💳 قبلی: {old_card}\n"
-        f"💳 جدید: {new_card}"
-    )
+    await update.message.reply_text(f"✅ شماره کارت تغییر کرد!\n\n💳 جدید: {new_card}")
 
     keyboard = [
         [InlineKeyboardButton("💳 مدیریت پرداخت", callback_data="admin_payment")],
@@ -1534,15 +1979,10 @@ async def admin_edit_card_holder(update: Update, context: ContextTypes.DEFAULT_T
 async def save_card_holder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_holder = update.message.text.strip()
     data = load_data()
-    old_holder = data.get("card_holder", "تنظیم نشده")
     data["card_holder"] = new_holder
     save_data(data)
 
-    await update.message.reply_text(
-        f"✅ نام صاحب کارت تغییر کرد!\n\n"
-        f"👤 قبلی: {old_holder}\n"
-        f"👤 جدید: {new_holder}"
-    )
+    await update.message.reply_text(f"✅ نام صاحب کارت تغییر کرد!\n\n👤 جدید: {new_holder}")
 
     keyboard = [
         [InlineKeyboardButton("💳 مدیریت پرداخت", callback_data="admin_payment")],
@@ -1588,7 +2028,7 @@ async def admin_edit_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         f"📱 ویرایش شماره تلفن\n\n"
         f"شماره فعلی: {contact.get('phone', 'تنظیم نشده')}\n\n"
-        f"لطفا شماره تلفن جدید را وارد کنید:\n(مثلا: 09121234567)"
+        f"لطفا شماره تلفن جدید را وارد کنید:"
     )
     return ADMIN_NEW_PHONE
 
@@ -1597,15 +2037,10 @@ async def save_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     if "contact_info" not in data:
         data["contact_info"] = {}
-    old_phone = data["contact_info"].get("phone", "تنظیم نشده")
     data["contact_info"]["phone"] = new_phone
     save_data(data)
 
-    await update.message.reply_text(
-        f"✅ شماره تلفن تغییر کرد!\n\n"
-        f"📱 قبلی: {old_phone}\n"
-        f"📱 جدید: {new_phone}"
-    )
+    await update.message.reply_text(f"✅ شماره تلفن تغییر کرد!\n\n📱 جدید: {new_phone}")
 
     keyboard = [
         [InlineKeyboardButton("📞 مدیریت تماس", callback_data="admin_contact")],
@@ -1633,15 +2068,10 @@ async def save_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     if "contact_info" not in data:
         data["contact_info"] = {}
-    old_address = data["contact_info"].get("address", "تنظیم نشده")
     data["contact_info"]["address"] = new_address
     save_data(data)
 
-    await update.message.reply_text(
-        f"✅ آدرس تغییر کرد!\n\n"
-        f"🏪 قبلی: {old_address}\n"
-        f"🏪 جدید: {new_address}"
-    )
+    await update.message.reply_text(f"✅ آدرس تغییر کرد!\n\n🏪 جدید: {new_address}")
 
     keyboard = [
         [InlineKeyboardButton("📞 مدیریت تماس", callback_data="admin_contact")],
@@ -1660,7 +2090,7 @@ async def admin_edit_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         f"⏰ ویرایش ساعت کاری\n\n"
         f"ساعت فعلی: {contact.get('hours', 'تنظیم نشده')}\n\n"
-        f"لطفا ساعت کاری جدید را وارد کنید:\n(مثلا: ۹ صبح تا ۹ شب)"
+        f"لطفا ساعت کاری جدید را وارد کنید:"
     )
     return ADMIN_NEW_HOURS
 
@@ -1669,15 +2099,10 @@ async def save_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     if "contact_info" not in data:
         data["contact_info"] = {}
-    old_hours = data["contact_info"].get("hours", "تنظیم نشده")
     data["contact_info"]["hours"] = new_hours
     save_data(data)
 
-    await update.message.reply_text(
-        f"✅ ساعت کاری تغییر کرد!\n\n"
-        f"⏰ قبلی: {old_hours}\n"
-        f"⏰ جدید: {new_hours}"
-    )
+    await update.message.reply_text(f"✅ ساعت کاری تغییر کرد!\n\n⏰ جدید: {new_hours}")
 
     keyboard = [
         [InlineKeyboardButton("📞 مدیریت تماس", callback_data="admin_contact")],
@@ -1776,7 +2201,6 @@ def main():
     logger.info(f"Health server on port {PORT}")
     logger.info(f"Super Admin ID: {SUPER_ADMIN_ID}")
     
-    # کش اولیه
     load_data()
     build_cache()
 
@@ -1804,6 +2228,15 @@ def main():
                 CallbackQueryHandler(admin_remove_product, pattern="^admin_remove$"),
                 CallbackQueryHandler(admin_remove_cat, pattern="^rc_"),
                 CallbackQueryHandler(confirm_remove, pattern="^rp_"),
+                CallbackQueryHandler(admin_cats, pattern="^admin_cats$"),
+                CallbackQueryHandler(admin_cat_menu, pattern="^catmnu_"),
+                CallbackQueryHandler(admin_cat_move_up, pattern="^cmup_"),
+                CallbackQueryHandler(admin_cat_move_down, pattern="^cmdn_"),
+                CallbackQueryHandler(admin_edit_cat_name_start, pattern="^ecn_"),
+                CallbackQueryHandler(admin_edit_cat_icon_start, pattern="^eci_"),
+                CallbackQueryHandler(admin_add_cat_start, pattern="^addcat_new$"),
+                CallbackQueryHandler(admin_delete_cat, pattern="^dcat_"),
+                CallbackQueryHandler(admin_confirm_delete_cat, pattern="^cdel_"),
                 CallbackQueryHandler(admin_shipping, pattern="^admin_shipping$"),
                 CallbackQueryHandler(admin_edit_shipping, pattern="^es_"),
                 CallbackQueryHandler(admin_remove_shipping, pattern="^rs_"),
@@ -1847,6 +2280,10 @@ def main():
             ADMIN_NEW_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_address)],
             ADMIN_NEW_HOURS: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_hours)],
             ADMIN_ADD_NEW_ADMIN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_new_admin)],
+            ADMIN_ADD_CAT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_new_cat_name)],
+            ADMIN_ADD_CAT_ICON: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_new_cat)],
+            ADMIN_EDIT_CAT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_cat_name)],
+            ADMIN_EDIT_CAT_ICON: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_cat_icon)],
         },
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start)],
     )
