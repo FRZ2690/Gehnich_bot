@@ -504,6 +504,7 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return MAIN_MENU
 
     context.user_data["selected_product"] = product_name
+    icon = get_cat_icon(data, cat_name)
 
     text = (
         f"{icon} {product_name}\n\n"
@@ -554,8 +555,9 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["cart"][product_name] = qty
 
     data = load_data()
-    product, _ = find_product(data, product_name)
+    product, cat_name = find_product(data, product_name)
     item_total = int(product["price"] * qty)
+    icon = get_cat_icon(data, cat_name)
 
     text = (
         f"✅ به سبد خرید اضافه شد!\n\n"
@@ -594,12 +596,13 @@ async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = 0
 
     for product_name, qty in cart.items():
-        product, _ = find_product(data, product_name)
+        product, cat_name = find_product(data, product_name)
         if product:
             price = product["price"]
             item_total = int(price * qty)
             total += item_total
-            text += f"▫️ {product_name}\n   {qty} عدد × {format_price(price)} = {format_price(item_total)}\n\n"
+            icon = get_cat_icon(data, cat_name)
+            text += f"{icon} {product_name}\n   {qty} عدد × {format_price(price)} = {format_price(item_total)}\n\n"
 
     text += f"\n💰 جمع کل: {format_price(total)}"
 
@@ -873,10 +876,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 if count >= 30:
                     text += f"\n(و {len(results) - 30} مورد دیگر...)"
                     break
-                text += f"▫️ {name} - {format_price(info['price'])}\n"
+                cat_name = info.get("category", "")
+                icon = get_cat_icon(data, cat_name)
                 prod_id = get_prod_id(name)
                 keyboard.append([
-                    InlineKeyboardButton(f"🌿 {name}", callback_data=f"product_{prod_id}")
+                    InlineKeyboardButton(f"{icon} {name} - {format_price(info['price'])}", callback_data=f"product_{prod_id}")
                 ])
                 count += 1
             keyboard.append([InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_main")])
