@@ -310,14 +310,14 @@ def get_default_data():
             "پست پیشتاز": 45000,
             "پست سفارشی": 30000,
             "تیپاکس": 65000,
-            "پیک (تهران)": 50000
+            "پیک (ایرانشهر)": 120000
         },
         "card_number": "6037-XXXX-XXXX-XXXX",
         "card_holder": "نام صاحب فروشگاه",
         "contact_info": {
-            "phone": "09XXXXXXXXX",
-            "address": "تهران",
-            "hours": "۹ صبح تا ۹ شب"
+            "phone": "09158483757",
+            "address": "ایرانشهر بلوار شهید بهشتی",
+            "hours": "10-14 & 15:30-21"
         },
         "admins": list(DEFAULT_ADMIN_IDS),
         "cat_icons": dict(DEFAULT_CAT_ICONS),
@@ -329,9 +329,9 @@ def load_data():
             data = json.load(f)
             if "contact_info" not in data:
                 data["contact_info"] = {
-                    "phone": "09XXXXXXXXX",
-                    "address": "تهران",
-                    "hours": "۹ صبح تا ۹ شب"
+                    "phone": "09158483757",
+                    "address": "ایرانشهر بلوار شهید بهشتی ",
+                    "hours": "10-14 & 15:30-21"
                 }
             if "admins" not in data:
                 data["admins"] = list(DEFAULT_ADMIN_IDS)
@@ -416,12 +416,9 @@ async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     build_cache()
 
     text = (
-        "🟢━━━━━━━━━━━━━━━━━━🟢\n"
-        "🌿  فروشگاه ادویه گهنیج  🌿\n"
-        "🟢━━━━━━━━━━━━━━━━━━🟢\n\n"
+        "🌿 فروشگاه ادویه گهنیج\n\n"
         "📂 دسته بندی محصولات:\n\n"
-        "لطفا یک دسته را انتخاب کنید:\n\n"
-        "🟢━━━━━━━━━━━━━━━━━━🟢"
+        "لطفا یک دسته را انتخاب کنید:"
     )
     
     keyboard = []
@@ -467,16 +464,15 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     products = data.get("categories", {}).get(cat_name, {})
     icon = get_cat_icon(data, cat_name)
 
-    text = f"🟢━━━━━━━━━━━━━━━━━━🟢\n{icon} {cat_name}\n🟢━━━━━━━━━━━━━━━━━━🟢\n\n"
+    text = f"{icon} {cat_name}\n\nلطفا محصول مورد نظر خود را انتخاب کنید:"
     keyboard = []
 
     for name, info in products.items():
         if info["available"]:
-            text += f"▫️ {name} - {format_price(info['price'])}\n"
             prod_id = get_prod_id(name)
             keyboard.append([
                 InlineKeyboardButton(
-                    f"🌿 {name}",
+                    f"{icon} {name} - {format_price(info['price'])}",
                     callback_data=f"product_{prod_id}"
                 )
             ])
@@ -485,9 +481,6 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton("🔙 بازگشت به دسته ها", callback_data="browse")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-
-    if len(text) > 4000:
-        text = text[:3900] + "\n...\n(محصولات زیاد است، از دکمه ها انتخاب کنید)"
 
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
@@ -513,7 +506,7 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["selected_product"] = product_name
 
     text = (
-        f"🌿 {product_name}\n\n"
+        f"{icon} {product_name}\n\n"
         f"📂 دسته: {cat_name}\n"
         f"💰 قیمت: {format_price(product['price'])}\n"
         f"📦 نوع بسته: {product['unit']}\n"
@@ -566,7 +559,7 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         f"✅ به سبد خرید اضافه شد!\n\n"
-        f"🌿 {product_name}\n"
+        f"{icon} {product_name}\n"
         f"📦 تعداد: {qty}\n"
         f"💰 قیمت: {format_price(item_total)}\n"
     )
@@ -835,9 +828,9 @@ async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         "📞 تماس با ما:\n\n"
-        f"📱 تلفن: {contact.get('phone', '09XXXXXXXXX')}\n"
-        f"🏪 آدرس: {contact.get('address', 'تهران')}\n"
-        f"⏰ ساعت کاری: {contact.get('hours', '۹ صبح تا ۹ شب')}\n\n"
+        f"📱 تلفن: {contact.get('phone', '09158483757')}\n"
+        f"🏪 آدرس: {contact.get('address', 'ایرانشهر بلوار شهید بهشتی')}\n"
+        f"⏰ ساعت کاری: {contact.get('hours', '10-14 & 15:30-21')}\n\n"
         "🌿 فروشگاه ادویه جات گهنیج"
     )
 
@@ -1532,7 +1525,7 @@ async def admin_select_for_price(update: Update, context: ContextTypes.DEFAULT_T
 
     await query.edit_message_text(
         f"✏️ ویرایش قیمت\n\n"
-        f"🌿 {product_name}\n"
+        f"{icon} {product_name}\n"
         f"💰 قیمت فعلی: {format_price(product['price'])}\n\n"
         f"لطفا قیمت جدید را به تومان وارد کنید:\n(فقط عدد، مثلا: 150000)"
     )
@@ -1557,7 +1550,7 @@ async def save_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(
                 f"✅ قیمت با موفقیت تغییر کرد!\n\n"
-                f"🌿 {product_name}\n"
+                f"{icon} {product_name}\n"
                 f"💰 قبلی: {format_price(old_price)}\n"
                 f"💰 جدید: {format_price(new_price)}"
             )
