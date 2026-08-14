@@ -323,7 +323,7 @@ def get_default_data():
         "cat_icons": dict(DEFAULT_CAT_ICONS),
         "cat_order": list(DEFAULT_CAT_ORDER)
     }
-    def load_data():
+def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
