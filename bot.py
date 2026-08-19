@@ -354,7 +354,7 @@ def save_data(data):
     build_cache()
 
 def format_price(price):
-    return f"{price:,} تومان"
+    return f"{price // 1000} هزار تومان"
 
 def get_all_products(data):
     all_products = {}
@@ -1521,11 +1521,13 @@ async def admin_select_for_price(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["editing_product"] = product_name
 
     data = load_data()
-    product, _ = find_product(data, product_name)
+    product, cat_name = find_product(data, product_name)
 
     if not product:
         await query.edit_message_text("❌ محصول پیدا نشد!")
         return MAIN_MENU
+
+    icon = get_cat_icon(data, cat_name)
 
     await query.edit_message_text(
         f"✏️ ویرایش قیمت\n\n"
@@ -1551,6 +1553,8 @@ async def save_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             old_price = products[product_name]["price"]
             products[product_name]["price"] = new_price
             save_data(data)
+            
+            icon = get_cat_icon(data, cat_name)
             
             await update.message.reply_text(
                 f"✅ قیمت با موفقیت تغییر کرد!\n\n"
