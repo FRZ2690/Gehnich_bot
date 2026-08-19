@@ -312,8 +312,8 @@ def get_default_data():
             "تیپاکس": 65000,
             "پیک (ایرانشهر)": 120000
         },
-        "card_number": "6037-XXXX-XXXX-XXXX",
-        "card_holder": "نام صاحب فروشگاه",
+        "card_number": "6219861941858903",
+        "card_holder": "فهیمه امینی",
         "contact_info": {
             "phone": "09158483757",
             "address": "ایرانشهر بلوار شهید بهشتی",
@@ -355,6 +355,30 @@ def save_data(data):
 
 def format_price(price):
     return f"{price // 1000} هزار تومان"
+
+def shorten_name(name: str) -> str:
+    # حذف کلمات اضافه در ابتدای نام
+    for prefix in ["ادویه ", "چاشنی ", "پودر "]:
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    
+    # خلاصه‌سازی نوع بسته‌بندی
+    name = name.replace("قوطی مربعی", "ق")
+    name = name.replace("قوطی", "ق")
+    name = name.replace("پاکت نیم کیلویی", "نیم کیلو")
+    name = name.replace("نیم کیلویی", "نیم کیلو")
+    name = name.replace("نمکپاشی", "نمکپاش")
+    
+    # خلاصه‌سازی گرم
+    name = name.replace("گرمی", "گ")
+    name = name.replace("گرم", "گ")
+    
+    # اصلاح فاصله‌های اضافی
+    name = " ".join(name.split())
+    name = name.replace("گ )", "گ)")
+    
+    return name
 
 def get_all_products(data):
     all_products = {}
@@ -472,7 +496,7 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
             prod_id = get_prod_id(name)
             keyboard.append([
                 InlineKeyboardButton(
-                    f"{icon} {name} - {format_price(info['price'])}",
+                    f"{icon} {shorten_name(name)} - {format_price(info['price'])}",
                     callback_data=f"product_{prod_id}"
                 )
             ])
@@ -880,7 +904,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 icon = get_cat_icon(data, cat_name)
                 prod_id = get_prod_id(name)
                 keyboard.append([
-                    InlineKeyboardButton(f"{icon} {name} - {format_price(info['price'])}", callback_data=f"product_{prod_id}")
+                    InlineKeyboardButton(f"{icon} {shorten_name(name)} - {format_price(info['price'])}", callback_data=f"product_{prod_id}")
                 ])
                 count += 1
             keyboard.append([InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_main")])
@@ -1493,7 +1517,7 @@ async def admin_price_category(update: Update, context: ContextTypes.DEFAULT_TYP
         prod_id = get_prod_id(name)
         keyboard.append([
             InlineKeyboardButton(
-                f"✏️ {name}",
+                f"✏️ {shorten_name(name)}",
                 callback_data=f"ep_{prod_id}"
             )
         ])
@@ -1709,7 +1733,7 @@ async def admin_remove_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for name in products:
         prod_id = get_prod_id(name)
-        keyboard.append([InlineKeyboardButton(f"🗑 {name}", callback_data=f"rp_{prod_id}")])
+        keyboard.append([InlineKeyboardButton(f"🗑 {shorten_name(name)}", callback_data=f"rp_{prod_id}")])
 
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_remove")])
     reply_markup = InlineKeyboardMarkup(keyboard)
