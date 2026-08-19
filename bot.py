@@ -84,8 +84,9 @@ def run_health_server():
     ADMIN_NEW_PHONE, ADMIN_NEW_ADDRESS, ADMIN_NEW_HOURS,
     ADMIN_ADD_NEW_ADMIN_ID,
     ADMIN_ADD_CAT_NAME, ADMIN_ADD_CAT_ICON,
-    ADMIN_EDIT_CAT_NAME, ADMIN_EDIT_CAT_ICON
-) = range(23)
+    ADMIN_EDIT_CAT_NAME, ADMIN_EDIT_CAT_ICON,
+    ADMIN_NEW_CHAT_LINK
+) = range(24)
 
 # ============ کش ============
 _id_to_name_cache = {}
@@ -321,7 +322,8 @@ def get_default_data():
         },
         "admins": list(DEFAULT_ADMIN_IDS),
         "cat_icons": dict(DEFAULT_CAT_ICONS),
-        "cat_order": list(DEFAULT_CAT_ORDER)
+        "cat_order": list(DEFAULT_CAT_ORDER),
+        "chat_manager_link": f"tg://user?id={SUPER_ADMIN_ID}"
     }
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -341,6 +343,8 @@ def load_data():
                 data["cat_icons"] = dict(DEFAULT_CAT_ICONS)
             if "cat_order" not in data:
                 data["cat_order"] = list(DEFAULT_CAT_ORDER)
+            if "chat_manager_link" not in data:
+                data["chat_manager_link"] = f"tg://user?id={SUPER_ADMIN_ID}"
             save_data(data)
             return data
     else:
@@ -407,6 +411,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "cart" not in context.user_data:
         context.user_data["cart"] = {}
 
+    data = load_data()
+    chat_link = data.get("chat_manager_link", f"tg://user?id={SUPER_ADMIN_ID}")
+
     welcome_text = (
         f"🌿 سلام {user.first_name} عزیز!\n\n"
         f"به فروشگاه ادویه جات گهنیج خوش آمدید 🌿\n\n"
@@ -417,7 +424,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🛒 مشاهده محصولات", callback_data="browse")],
         [InlineKeyboardButton("🔍 جستجوی محصول", callback_data="search")],
         [InlineKeyboardButton("🛍 سبد خرید", callback_data="cart")],
-        [InlineKeyboardButton("📞 تماس با ما", callback_data="contact")],
+        [
+            InlineKeyboardButton("📞 تماس با ما", callback_data="contact"),
+            InlineKeyboardButton("👨‍💼 چت با مدیر", url=chat_link)
+        ],
     ]
 
     if is_admin(user.id):
@@ -936,6 +946,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📦 مدیریت هزینه ارسال", callback_data="admin_shipping")],
         [InlineKeyboardButton("💳 مدیریت اطلاعات پرداخت", callback_data="admin_payment")],
         [InlineKeyboardButton("📞 مدیریت اطلاعات تماس", callback_data="admin_contact")],
+        [InlineKeyboardButton("👨‍💼 تنظیم لینک چت با مدیر", callback_data="admin_chat_link")],
         [InlineKeyboardButton("📋 لیست سفارشات", callback_data="admin_orders")],
         [InlineKeyboardButton("📊 آمار فروش", callback_data="admin_stats")],
     ]
@@ -2137,6 +2148,44 @@ async def save_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
     return MAIN_MENU
 
+# ============ تنظیم لینک چت با مدیر ============
+async def admin_chat_link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    current_link = data.get("chat_manager_link", f"tg://user?id={SUPER_ADMIN_ID}")
+
+    await query.edit_message_text(
+        f"👨‍💼 تنظیم لینک چت با مدیر\n\n"
+        f"لینک فعلی: {current_link}\n\n"
+        f"لطفا لینک جدید یا آیدی عددی را وارد کنید:\n"
+        f"(اگر آیدی عددی وارد کنید، خودکار تبدیل به لینک تلگرام می‌شود)\n"
+        f"(مثال آیدی: 123456789)\n"
+        f"(مثال لینک: https://t.me/username)"
+    )
+    return ADMIN_NEW_CHAT_LINK
+
+async def save_chat_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_link = update.message.text.strip()
+    data = load_data()
+
+    # اگر فقط عدد وارد شد، آن را به لینک کاربر تلگرام تبدیل کن
+    if new_link.isdigit():
+        new_link = f"tg://user?id={new_link}"
+
+    data["chat_manager_link"] = new_link
+    save_data(data)
+
+    await update.message.reply_text(f"✅ لینک چت با مدیر تغییر کرد!\n\n🔗 جدید: {new_link}")
+
+    keyboard = [
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
 # ============ لیست سفارشات و آمار ============
 async def admin_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -2273,6 +2322,7 @@ def main():
                 CallbackQueryHandler(admin_edit_phone, pattern="^editcontact_phone$"),
                 CallbackQueryHandler(admin_edit_address, pattern="^editcontact_address$"),
                 CallbackQueryHandler(admin_edit_hours, pattern="^editcontact_hours$"),
+                CallbackQueryHandler(admin_chat_link_start, pattern="^admin_chat_link$"),
                 CallbackQueryHandler(admin_orders, pattern="^admin_orders$"),
                 CallbackQueryHandler(admin_stats, pattern="^admin_stats$"),
                 CallbackQueryHandler(admin_admins, pattern="^admin_admins$"),
@@ -2309,6 +2359,7 @@ def main():
             ADMIN_ADD_CAT_ICON: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_new_cat)],
             ADMIN_EDIT_CAT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_cat_name)],
             ADMIN_EDIT_CAT_ICON: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_cat_icon)],
+            ADMIN_NEW_CHAT_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_chat_link)],
         },
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start)],
     )
