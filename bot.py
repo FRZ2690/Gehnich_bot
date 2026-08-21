@@ -43,7 +43,6 @@ DEFAULT_CAT_ICONS = {
     "زردچوبه چارمنار": "💛",
 }
 
-# ترتیب پیش‌فرض دسته ها
 DEFAULT_CAT_ORDER = [
     "ادویه جات ترکیبی گهنیج",
     "چاشنی های گهنیج",
@@ -91,12 +90,9 @@ def run_health_server():
     ADMIN_PROMO_THRESHOLD_AMOUNT,
     ADMIN_PROMO_THRESHOLD_PERCENT,
     ADMIN_PROMO_THRESHOLD_DURATION,
-    ADMIN_PRODUCT_DISCOUNT_PERCENT,
-    ADMIN_PRODUCT_DISCOUNT_DURATION,
-    ADMIN_GIFT_TYPE,
     ADMIN_GIFT_MIN_AMOUNT,
     ADMIN_GIFT_DURATION
-) = range(33)
+) = range(31)
 
 # ============ کش ============
 _id_to_name_cache = {}
@@ -334,20 +330,28 @@ def get_default_data():
         "cat_icons": dict(DEFAULT_CAT_ICONS),
         "cat_order": list(DEFAULT_CAT_ORDER),
         "chat_manager_link": f"tg://user?id={SUPER_ADMIN_ID}",
-        "promotions": [],
-        "product_discounts": [],
-        "gift": {
-            "type": "",
-            "min_amount": 0,
-            "end_time": 0,
-            "active": False
-        }
+        "threshold_discounts": [],
+        "gifts": []
     }
 
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
+            # migrate old keys
+            if "promotions" in data and "threshold_discounts" not in data:
+                data["threshold_discounts"] = data.pop("promotions")
+            if "threshold_discounts" not in data:
+                data["threshold_discounts"] = []
+            if "gifts" not in data:
+                data["gifts"] = []
+            if "product_discounts" in data:
+                # ignore old product discounts
+                pass
+            if "gift" in data:
+                # ignore old single gift
+                pass
+
             if "contact_info" not in data:
                 data["contact_info"] = {
                     "phone": "09158483757",
@@ -364,17 +368,6 @@ def load_data():
                 data["cat_order"] = list(DEFAULT_CAT_ORDER)
             if "chat_manager_link" not in data:
                 data["chat_manager_link"] = f"tg://user?id={SUPER_ADMIN_ID}"
-            if "promotions" not in data:
-                data["promotions"] = []
-            if "product_discounts" not in data:
-                data["product_discounts"] = []
-            if "gift" not in data:
-                data["gift"] = {
-                    "type": "",
-                    "min_amount": 0,
-                    "end_time": 0,
-                    "active": False
-                }
             save_data(data)
             return data
     else:
@@ -391,24 +384,19 @@ def format_price(price):
     return f"{price // 1000} هزار تومان"
 
 def shorten_name(name: str) -> str:
-    # حذف کلمات اضافه در ابتدای نام
     for prefix in ["ادویه ", "چاشنی ", "پودر "]:
         if name.startswith(prefix):
             name = name[len(prefix):]
             break
     
-    # خلاصه‌سازی نوع بسته‌بندی
     name = name.replace("قوطی مربعی", "ق")
     name = name.replace("قوطی", "ق")
     name = name.replace("پاکت نیم کیلویی", "نیم کیلو")
     name = name.replace("نیم کیلویی", "نیم کیلو")
     name = name.replace("نمک‌پاشی", "نمک‌پاش")
-    
-    # خلاصه‌سازی گرم
     name = name.replace("گرمی", "گ")
     name = name.replace("گرم", "گ")
     
-    # اصلاح فاصله‌های اضافی
     name = " ".join(name.split())
     name = name.replace("گ )", "گ)")
     
@@ -436,9 +424,9 @@ def is_super_admin(user_id):
     return user_id == SUPER_ADMIN_ID
 
 # ============ توابع کمکی تخفیف و هدیه ============
-def get_active_threshold_discount(data, total_amount, current_time):
+def get_active_threshold_discounts(data, total_amount, current_time):
     active = []
-    for promo in data.get("promotions", []):
+    for promo in data.get("threshold_discounts", []):
         if promo.get("active") and promo.get("end_time", 0) > current_time:
             if total_amount > promo.get("threshold_amount", 0):
                 active.append(promo)
@@ -447,17 +435,12 @@ def get_active_threshold_discount(data, total_amount, current_time):
         return max(active, key=lambda x: x["threshold_amount"])
     return None
 
-def get_product_discount(data, product_name, current_time):
-    for d in data.get("product_discounts", []):
-        if d.get("product_name") == product_name and d.get("active") and d.get("end_time", 0) > current_time:
-            return d.get("discount_percent", 0)
-    return 0
-
-def get_active_gift(data, current_time):
-    gift = data.get("gift", {})
-    if gift.get("active") and gift.get("end_time", 0) > current_time and gift.get("type"):
-        return gift
-    return None
+def get_active_gifts(data, current_time):
+    active_gifts = []
+    for gift in data.get("gifts", []):
+        if gift.get("active") and gift.get("end_time", 0) > current_time:
+            active_gifts.append(gift)
+    return active_gifts
 
 # ============ شروع ============
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -495,7 +478,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ============ نمایش دسته بندی ها (دو ستونه با کادر سبز) ============
+# ============ نمایش دسته بندی ها ============
 async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -510,12 +493,10 @@ async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     keyboard = []
-    # تب ویژه همه محصولات
     keyboard.append([InlineKeyboardButton("🌟 همه محصولات", callback_data="cat_all")])
     
     ordered_cats = get_ordered_categories(data)
     
-    # دو ستونه
     row = []
     for i, cat_name in enumerate(ordered_cats):
         product_count = len(data["categories"][cat_name])
@@ -532,7 +513,6 @@ async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if row:
         keyboard.append(row)
 
-    # سبد خرید در وسط و پایین
     keyboard.append([InlineKeyboardButton("       🛍 سبد خرید       ", callback_data="cart")])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="back_main")])
 
@@ -546,23 +526,24 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cat_id = query.data.replace("cat_", "")
     
-    # حالت همه محصولات
     if cat_id == "all":
         data = load_data()
         all_products = get_all_products(data)
         icon = "🌟"
-        text = "🌟 همه محصولات\n\nلطفا محصول مورد نظر خود را انتخاب کنید:"
+        available_products = [(name, info) for name, info in all_products.items() if info["available"]]
+        total_count = len(available_products)
+        display_products = available_products[:50]
+        text = f"🌟 همه محصولات\n\nنمایش {len(display_products)} محصول از {total_count}:\n(برای دیدن بقیه از جستجو استفاده کنید)\n\n"
         keyboard = []
-        for name, info in all_products.items():
-            if info["available"]:
-                prod_id = get_prod_id(name)
-                cat_icon = get_cat_icon(data, info.get("category", ""))
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"{cat_icon} {shorten_name(name)} - {format_price(info['price'])}",
-                        callback_data=f"product_{prod_id}"
-                    )
-                ])
+        for name, info in display_products:
+            prod_id = get_prod_id(name)
+            cat_icon = get_cat_icon(data, info.get("category", ""))
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{cat_icon} {shorten_name(name)} - {format_price(info['price'])}",
+                    callback_data=f"product_{prod_id}"
+                )
+            ])
         context.user_data["last_category"] = "all"
         keyboard.append([InlineKeyboardButton("🛍 سبد خرید", callback_data="cart")])
         keyboard.append([InlineKeyboardButton("🔙 بازگشت به دسته ها", callback_data="browse")])
@@ -632,7 +613,6 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"تعداد مورد نظر را انتخاب کنید:"
     )
 
-    # دکمه بازگشت به دسته مناسب
     last_cat = context.user_data.get("last_category", get_cat_id(cat_name))
     back_callback = f"cat_{last_cat}" if last_cat != "all" else "cat_all"
 
@@ -878,7 +858,6 @@ async def select_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_time = time.time()
 
     original_products_total = 0
-    product_discount_total = 0
     order_details = ""
 
     for product_name, qty in cart.items():
@@ -887,46 +866,34 @@ async def select_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
             price = product["price"]
             line_total = int(price * qty)
             original_products_total += line_total
+            icon = get_cat_icon(data, cat_name)
+            order_details += f"  ▫️ {product_name}: {qty} عدد = {format_price(line_total)}\n"
 
-            disc_percent = get_product_discount(data, product_name, current_time)
-            if disc_percent:
-                line_discount = int(line_total * disc_percent / 100)
-                product_discount_total += line_discount
-                discounted_line = line_total - line_discount
-                order_details += f"  ▫️ {product_name}: {qty} عدد = {format_price(line_total)} (تخفیف {disc_percent}٪: {format_price(discounted_line)})\n"
-            else:
-                order_details += f"  ▫️ {product_name}: {qty} عدد = {format_price(line_total)}\n"
-
-    products_total_after_product = original_products_total - product_discount_total
-
-    threshold_promo = get_active_threshold_discount(data, products_total_after_product, current_time)
+    threshold_promo = get_active_threshold_discounts(data, original_products_total, current_time)
     threshold_discount = 0
     if threshold_promo:
-        threshold_discount = int(products_total_after_product * threshold_promo["discount_percent"] / 100)
+        threshold_discount = int(original_products_total * threshold_promo["discount_percent"] / 100)
 
-    final_products_total = products_total_after_product - threshold_discount
+    final_products_total = original_products_total - threshold_discount
     grand_total = final_products_total + shipping_cost
 
-    # هدیه بر اساس مبلغ اصلی خرید (بدون هزینه ارسال)
-    gift = get_active_gift(data, current_time)
-    gift_text = ""
-    if gift and original_products_total >= gift["min_amount"]:
-        gift_text = f"🎁 هدیه شما: {gift['type']}\n"
-    else:
-        gift_text = ""
+    active_gifts = get_active_gifts(data, current_time)
+    gifts_text = ""
+    gifts_list = []
+    for gift in active_gifts:
+        if original_products_total >= gift.get("threshold_amount", 0):
+            gift_product = gift.get("product_name", "")
+            if gift_product:
+                gifts_list.append(gift_product)
+                gifts_text += f"🎁 {gift_product}\n"
 
     context.user_data["grand_total"] = grand_total
-    context.user_data["total_discount"] = product_discount_total + threshold_discount
-    context.user_data["gift"] = gift_text
-    context.user_data["final_products_total"] = final_products_total
+    context.user_data["total_discount"] = threshold_discount
+    context.user_data["gifts"] = gifts_list
 
-    # ساخت متن تخفیف
     discount_summary = ""
-    if product_discount_total or threshold_discount:
-        if product_discount_total:
-            discount_summary += f"💰 تخفیف محصولات: {format_price(product_discount_total)}\n"
-        if threshold_promo:
-            discount_summary += f"🏷 تخفیف خرید بالای {format_price(threshold_promo['threshold_amount'])}: {threshold_promo['discount_percent']}٪ = {format_price(threshold_discount)}\n"
+    if threshold_discount:
+        discount_summary += f"🏷 تخفیف خرید بالای {format_price(threshold_promo['threshold_amount'])}: {threshold_promo['discount_percent']}٪ = {format_price(threshold_discount)}\n"
         discount_summary += f"💰 جمع پس از تخفیف: {format_price(final_products_total)}\n"
     else:
         discount_summary = f"💰 جمع محصولات: {format_price(original_products_total)}\n"
@@ -944,8 +911,8 @@ async def select_shipping(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💵 مبلغ قابل پرداخت: {format_price(grand_total)}\n"
     )
 
-    if gift_text:
-        text += f"\n{gift_text}"
+    if gifts_text:
+        text += f"\n{gifts_text}"
 
     text += (
         f"\n━━━━━━━━━━━━━━━\n"
@@ -974,6 +941,8 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cart = context.user_data.get("cart", {})
     user = update.effective_user
 
+    gifts = context.user_data.get("gifts", [])
+
     order = {
         "order_id": len(data["orders"]) + 1,
         "user_id": user.id,
@@ -986,7 +955,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "items": dict(cart),
         "grand_total": context.user_data["grand_total"],
         "discount": context.user_data.get("total_discount", 0),
-        "gift": context.user_data.get("gift", ""),
+        "gifts": gifts,
         "status": "در انتظار تایید"
     }
 
@@ -1011,8 +980,9 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     discount_info = ""
     if order.get("discount"):
         discount_info += f"💰 تخفیف: {format_price(order['discount'])}\n"
-    if order.get("gift"):
-        discount_info += f"🎁 {order['gift']}\n"
+    gift_info = ""
+    if order.get("gifts"):
+        gift_info += f"🎁 هدایا: {', '.join(order['gifts'])}\n"
 
     admin_text = (
         f"🔔 سفارش جدید #{order['order_id']}\n\n"
@@ -1022,6 +992,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🚚 ارسال: {order['shipping_method']} ({format_price(order['shipping_cost'])})\n\n"
         f"📦 محصولات:\n{order_text}\n"
         f"{discount_info}"
+        f"{gift_info}"
         f"💵 مبلغ کل: {format_price(order['grand_total'])}\n\n"
         f"🆔 یوزرنیم: @{order['username']}\n"
         f"🔑 آیدی: {order['user_id']}"
@@ -1141,7 +1112,8 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💳 مدیریت اطلاعات پرداخت", callback_data="admin_payment")],
         [InlineKeyboardButton("📞 مدیریت اطلاعات تماس", callback_data="admin_contact")],
         [InlineKeyboardButton("👨‍💼 تنظیم لینک چت با مدیر", callback_data="admin_chat_link")],
-        [InlineKeyboardButton("🎁 تخفیف‌ها و هدیه", callback_data="admin_promotions")],
+        [InlineKeyboardButton("🏷 تخفیف‌ها", callback_data="admin_discounts")],
+        [InlineKeyboardButton("🎁 هدیه‌ها", callback_data="admin_gifts")],
         [InlineKeyboardButton("📋 لیست سفارشات", callback_data="admin_orders")],
         [InlineKeyboardButton("📊 آمار فروش", callback_data="admin_stats")],
     ]
@@ -1155,8 +1127,8 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ============ مدیریت تخفیف‌ها و هدیه ============
-async def admin_promotions_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ============ مدیریت تخفیف‌ها ============
+async def admin_discounts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
@@ -1166,65 +1138,30 @@ async def admin_promotions_menu(update: Update, context: ContextTypes.DEFAULT_TY
 
     data = load_data()
     current_time = time.time()
-    promos = data.get("promotions", [])
-    prod_discounts = data.get("product_discounts", [])
-    gift = data.get("gift", {})
+    discounts = data.get("threshold_discounts", [])
 
-    text = "🎁 مدیریت تخفیف‌ها و هدیه\n\n"
-    text += "🏷 تخفیف‌های مبلغی:\n"
-    for i, p in enumerate(promos):
-        active = p.get("active") and p.get("end_time", 0) > current_time
-        status = "✅ فعال" if active else "❌ غیرفعال"
-        remaining = max(0, int(p.get("end_time", 0) - current_time) // 3600)
-        text += f"{i+1}. خرید بالای {format_price(p['threshold_amount'])} - {p['discount_percent']}٪ ({status} - {remaining} ساعت)\n"
-    if not promos:
-        text += "هیچ تخفیف مبلغی تعریف نشده.\n"
-
-    text += "\n🛍 تخفیف محصولات:\n"
-    for i, d in enumerate(prod_discounts):
+    text = "🏷 مدیریت تخفیف‌ها\n\n"
+    for i, d in enumerate(discounts):
         active = d.get("active") and d.get("end_time", 0) > current_time
         status = "✅ فعال" if active else "❌ غیرفعال"
-        text += f"{i+1}. {d['product_name']} - {d['discount_percent']}٪ ({status})\n"
-    if not prod_discounts:
-        text += "هیچ تخفیف محصولی تعریف نشده.\n"
-
-    text += "\n🎁 هدیه:\n"
-    if gift.get("active") and gift.get("end_time", 0) > current_time:
-        text += f"نوع: {gift.get('type', '')}\nحداقل خرید: {format_price(gift.get('min_amount', 0))}\nوضعیت: ✅ فعال\n"
-    else:
-        text += "وضعیت: ❌ غیرفعال\n"
+        remaining = max(0, int(d.get("end_time", 0) - current_time) // 3600)
+        text += f"{i+1}. خرید بالای {format_price(d['threshold_amount'])} - {d['discount_percent']}٪ ({status} - {remaining} ساعت)\n"
+    if not discounts:
+        text += "هیچ تخفیفی تعریف نشده.\n"
 
     keyboard = [
-        [InlineKeyboardButton("➕ تخفیف مبلغی جدید", callback_data="promo_add_threshold")],
-        [InlineKeyboardButton("🛍 تخفیف محصول جدید", callback_data="promo_add_product")],
-        [InlineKeyboardButton("🎁 تنظیم هدیه", callback_data="promo_gift")],
+        [InlineKeyboardButton("➕ تخفیف جدید", callback_data="promo_add_threshold")],
     ]
 
-    # دکمه‌های فعال/غیرفعال و حذف برای تخفیف‌های مبلغی
-    for i, p in enumerate(promos):
-        active = p.get("active") and p.get("end_time", 0) > current_time
-        toggle_text = "❌ غیرفعال" if active else "✅ فعال"
-        keyboard.append([
-            InlineKeyboardButton(f"{toggle_text} مبلغی {i+1}", callback_data=f"pth_toggle_{i}"),
-            InlineKeyboardButton("🗑 حذف", callback_data=f"pth_delete_{i}")
-        ])
-
-    # دکمه‌های فعال/غیرفعال و حذف برای تخفیف‌های محصولی
-    for i, d in enumerate(prod_discounts):
+    for i, d in enumerate(discounts):
         active = d.get("active") and d.get("end_time", 0) > current_time
         toggle_text = "❌ غیرفعال" if active else "✅ فعال"
         keyboard.append([
-            InlineKeyboardButton(f"{toggle_text} محصول {i+1}", callback_data=f"ppd_toggle_{i}"),
-            InlineKeyboardButton("🗑 حذف", callback_data=f"ppd_delete_{i}")
+            InlineKeyboardButton(f"{toggle_text} {i+1}", callback_data=f"td_toggle_{i}"),
+            InlineKeyboardButton("🗑 حذف", callback_data=f"td_delete_{i}")
         ])
 
-    if gift.get("active"):
-        keyboard.append([InlineKeyboardButton("❌ غیرفعال کردن هدیه", callback_data="gift_toggle")])
-    else:
-        keyboard.append([InlineKeyboardButton("✅ فعال کردن هدیه", callback_data="gift_toggle")])
-
     keyboard.append([InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data="admin")])
-
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
@@ -1278,7 +1215,7 @@ async def save_promo_threshold_duration(update: Update, context: ContextTypes.DE
         return ADMIN_PROMO_THRESHOLD_DURATION
 
     data = load_data()
-    data.setdefault("promotions", []).append({
+    data.setdefault("threshold_discounts", []).append({
         "threshold_amount": context.user_data["promo_threshold_amount"],
         "discount_percent": context.user_data["promo_threshold_percent"],
         "end_time": time.time() + duration * 3600,
@@ -1294,7 +1231,7 @@ async def save_promo_threshold_duration(update: Update, context: ContextTypes.DE
     )
 
     keyboard = [
-        [InlineKeyboardButton("🎁 مدیریت تخفیف‌ها", callback_data="admin_promotions")],
+        [InlineKeyboardButton("🏷 مدیریت تخفیف‌ها", callback_data="admin_discounts")],
         [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1306,60 +1243,98 @@ async def admin_toggle_threshold(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
 
     try:
-        idx = int(query.data.replace("pth_toggle_", ""))
+        idx = int(query.data.replace("td_toggle_", ""))
     except ValueError:
         await query.edit_message_text("❌ خطا!")
         return MAIN_MENU
 
     data = load_data()
-    promos = data.get("promotions", [])
-    if 0 <= idx < len(promos):
-        promos[idx]["active"] = not promos[idx].get("active", False)
+    discounts = data.get("threshold_discounts", [])
+    if 0 <= idx < len(discounts):
+        discounts[idx]["active"] = not discounts[idx].get("active", False)
         save_data(data)
 
-    return await admin_promotions_menu(update, context)
+    return await admin_discounts_menu(update, context)
 
 async def admin_delete_threshold(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     try:
-        idx = int(query.data.replace("pth_delete_", ""))
+        idx = int(query.data.replace("td_delete_", ""))
     except ValueError:
         await query.edit_message_text("❌ خطا!")
         return MAIN_MENU
 
     data = load_data()
-    promos = data.get("promotions", [])
-    if 0 <= idx < len(promos):
-        del promos[idx]
+    discounts = data.get("threshold_discounts", [])
+    if 0 <= idx < len(discounts):
+        del discounts[idx]
         save_data(data)
 
-    return await admin_promotions_menu(update, context)
+    return await admin_discounts_menu(update, context)
 
-# ---------- تخفیف محصول ----------
-async def admin_promo_add_product_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ============ مدیریت هدیه‌ها ============
+async def admin_gifts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if not is_admin(update.effective_user.id):
+        await query.edit_message_text("❌ شما دسترسی ندارید!")
+        return MAIN_MENU
+
+    data = load_data()
+    current_time = time.time()
+    gifts = data.get("gifts", [])
+
+    text = "🎁 مدیریت هدیه‌ها\n\n"
+    for i, g in enumerate(gifts):
+        active = g.get("active") and g.get("end_time", 0) > current_time
+        status = "✅ فعال" if active else "❌ غیرفعال"
+        remaining = max(0, int(g.get("end_time", 0) - current_time) // 3600)
+        text += f"{i+1}. {g.get('product_name','')} - حداقل خرید: {format_price(g.get('threshold_amount',0))} ({status} - {remaining} ساعت)\n"
+    if not gifts:
+        text += "هیچ هدیه‌ای تعریف نشده.\n"
+
+    keyboard = [
+        [InlineKeyboardButton("➕ هدیه جدید", callback_data="gift_add")],
+    ]
+
+    for i, g in enumerate(gifts):
+        active = g.get("active") and g.get("end_time", 0) > current_time
+        toggle_text = "❌ غیرفعال" if active else "✅ فعال"
+        keyboard.append([
+            InlineKeyboardButton(f"{toggle_text} {i+1}", callback_data=f"gift_toggle_{i}"),
+            InlineKeyboardButton("🗑 حذف", callback_data=f"gift_delete_{i}")
+        ])
+
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data="admin")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_gift_add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     data = load_data()
     build_cache()
-    text = "🛍 تخفیف محصول جدید\n\nابتدا دسته را انتخاب کنید:"
+    text = "🎁 انتخاب محصول هدیه\n\nابتدا دسته را انتخاب کنید:"
     keyboard = []
     for cat_name in get_ordered_categories(data):
         cat_id = get_cat_id(cat_name)
         icon = get_cat_icon(data, cat_name)
-        keyboard.append([InlineKeyboardButton(f"{icon} {cat_name}", callback_data=f"pd_cat_{cat_id}")])
-    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_promotions")])
+        keyboard.append([InlineKeyboardButton(f"{icon} {cat_name}", callback_data=f"gift_cat_{cat_id}")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_gifts")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-async def admin_product_discount_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_gift_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    cat_id = query.data.replace("pd_cat_", "")
+    cat_id = query.data.replace("gift_cat_", "")
     cat_name = get_cat_name(cat_id)
     if not cat_name:
         await query.edit_message_text("❌ دسته پیدا نشد!")
@@ -1367,180 +1342,32 @@ async def admin_product_discount_category(update: Update, context: ContextTypes.
 
     data = load_data()
     products = data.get("categories", {}).get(cat_name, {})
-    text = f"🛍 تخفیف محصول - {cat_name}\n\nمحصول را انتخاب کنید:"
+    text = f"🎁 انتخاب محصول هدیه - {cat_name}\n\nمحصول را انتخاب کنید:"
     keyboard = []
     for name in products:
         prod_id = get_prod_id(name)
-        keyboard.append([InlineKeyboardButton(shorten_name(name), callback_data=f"pd_prod_{prod_id}")])
-    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="promo_add_product")])
+        keyboard.append([InlineKeyboardButton(shorten_name(name), callback_data=f"gift_prod_{prod_id}")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="gift_add")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-async def admin_product_discount_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_gift_select_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    prod_id = query.data.replace("pd_prod_", "")
+    prod_id = query.data.replace("gift_prod_", "")
     product_name = get_prod_name(prod_id)
     if not product_name:
         await query.edit_message_text("❌ محصول پیدا نشد!")
         return MAIN_MENU
 
-    context.user_data["product_discount_name"] = product_name
+    context.user_data["gift_product_name"] = product_name
     await query.edit_message_text(
-        f"🛍 تخفیف محصول\n\n"
-        f"محصول: {product_name}\n\n"
-        f"درصد تخفیف را وارد کنید (مثلا 15):"
+        f"🎁 محصول هدیه: {product_name}\n\n"
+        f"حداقل مبلغ خرید را وارد کنید (تومان):\n"
+        f"مثلا: 1000000"
     )
-    return ADMIN_PRODUCT_DISCOUNT_PERCENT
-
-async def save_product_discount_percent(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        percent = int(update.message.text.replace("%", "").strip())
-    except ValueError:
-        await update.message.reply_text("❌ فقط عدد وارد کنید!")
-        return ADMIN_PRODUCT_DISCOUNT_PERCENT
-
-    if not 0 < percent <= 100:
-        await update.message.reply_text("❌ درصد باید بین 1 تا 100 باشد!")
-        return ADMIN_PRODUCT_DISCOUNT_PERCENT
-
-    context.user_data["product_discount_percent"] = percent
-    await update.message.reply_text("⏰ مدت زمان تخفیف را به ساعت وارد کنید (مثلا 48):")
-    return ADMIN_PRODUCT_DISCOUNT_DURATION
-
-async def save_product_discount_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        duration = int(update.message.text.strip())
-    except ValueError:
-        await update.message.reply_text("❌ فقط عدد وارد کنید!")
-        return ADMIN_PRODUCT_DISCOUNT_DURATION
-
-    if duration <= 0:
-        await update.message.reply_text("❌ مدت زمان باید بیشتر از صفر باشد!")
-        return ADMIN_PRODUCT_DISCOUNT_DURATION
-
-    data = load_data()
-    data.setdefault("product_discounts", []).append({
-        "product_name": context.user_data["product_discount_name"],
-        "discount_percent": context.user_data["product_discount_percent"],
-        "end_time": time.time() + duration * 3600,
-        "active": True
-    })
-    save_data(data)
-
-    await update.message.reply_text(
-        f"✅ تخفیف محصول اضافه شد!\n\n"
-        f"محصول: {context.user_data['product_discount_name']}\n"
-        f"درصد: {context.user_data['product_discount_percent']}٪\n"
-        f"مدت: {duration} ساعت"
-    )
-
-    keyboard = [
-        [InlineKeyboardButton("🎁 مدیریت تخفیف‌ها", callback_data="admin_promotions")],
-        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
-    return MAIN_MENU
-
-async def admin_toggle_product_discount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    try:
-        idx = int(query.data.replace("ppd_toggle_", ""))
-    except ValueError:
-        await query.edit_message_text("❌ خطا!")
-        return MAIN_MENU
-
-    data = load_data()
-    pd_list = data.get("product_discounts", [])
-    if 0 <= idx < len(pd_list):
-        pd_list[idx]["active"] = not pd_list[idx].get("active", False)
-        save_data(data)
-
-    return await admin_promotions_menu(update, context)
-
-async def admin_delete_product_discount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    try:
-        idx = int(query.data.replace("ppd_delete_", ""))
-    except ValueError:
-        await query.edit_message_text("❌ خطا!")
-        return MAIN_MENU
-
-    data = load_data()
-    pd_list = data.get("product_discounts", [])
-    if 0 <= idx < len(pd_list):
-        del pd_list[idx]
-        save_data(data)
-
-    return await admin_promotions_menu(update, context)
-
-# ---------- هدیه ----------
-async def admin_gift_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    data = load_data()
-    gift = data.get("gift", {})
-    current_time = time.time()
-    active = gift.get("active") and gift.get("end_time", 0) > current_time
-
-    text = (
-        "🎁 مدیریت هدیه\n\n"
-        f"نوع هدیه: {gift.get('type', 'تنظیم نشده')}\n"
-        f"حداقل مبلغ خرید: {format_price(gift.get('min_amount', 0))}\n"
-        f"وضعیت: {'✅ فعال' if active else '❌ غیرفعال'}\n"
-        f"مدت باقی‌مانده: {max(0, int(gift.get('end_time', 0) - current_time) // 3600)} ساعت\n\n"
-        "چه چیزی را ویرایش می‌کنید؟"
-    )
-
-    keyboard = [
-        [InlineKeyboardButton("✏️ تنظیم نوع هدیه", callback_data="gift_set_type")],
-        [InlineKeyboardButton("💰 تنظیم حداقل مبلغ", callback_data="gift_set_min")],
-        [InlineKeyboardButton("⏰ تنظیم مدت زمان", callback_data="gift_set_duration")],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_promotions")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(text, reply_markup=reply_markup)
-    return MAIN_MENU
-
-async def admin_gift_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    data = load_data()
-    gift = data.setdefault("gift", {"type": "", "min_amount": 0, "end_time": 0, "active": False})
-    gift["active"] = not gift.get("active", False)
-    save_data(data)
-
-    return await admin_promotions_menu(update, context)
-
-async def admin_gift_set_type_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text("🎁 نوع هدیه را وارد کنید:\n(مثلا: یک بسته زعتر رایگان)")
-    return ADMIN_GIFT_TYPE
-
-async def save_gift_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gift_type = update.message.text.strip()
-    data = load_data()
-    data.setdefault("gift", {"type": "", "min_amount": 0, "end_time": 0, "active": False})
-    data["gift"]["type"] = gift_type
-    save_data(data)
-
-    await update.message.reply_text(f"✅ نوع هدیه تنظیم شد!\n\n🎁 {gift_type}")
-    return await admin_gift_menu(update, context)
-
-async def admin_gift_set_min_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text("💰 حداقل مبلغ خرید برای هدیه را وارد کنید (تومان):\nمثلا: 1000000")
     return ADMIN_GIFT_MIN_AMOUNT
 
 async def save_gift_min_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1550,18 +1377,8 @@ async def save_gift_min_amount(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("❌ فقط عدد وارد کنید!")
         return ADMIN_GIFT_MIN_AMOUNT
 
-    data = load_data()
-    data.setdefault("gift", {"type": "", "min_amount": 0, "end_time": 0, "active": False})
-    data["gift"]["min_amount"] = min_amount
-    save_data(data)
-
-    await update.message.reply_text(f"✅ حداقل مبلغ هدیه تنظیم شد!\n\n💰 {format_price(min_amount)}")
-    return await admin_gift_menu(update, context)
-
-async def admin_gift_set_duration_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text("⏰ مدت زمان فعال بودن هدیه را به ساعت وارد کنید:\nمثلا: 72")
+    context.user_data["gift_threshold_amount"] = min_amount
+    await update.message.reply_text("⏰ مدت زمان فعال بودن هدیه را به ساعت وارد کنید:\nمثلا: 72")
     return ADMIN_GIFT_DURATION
 
 async def save_gift_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1576,13 +1393,64 @@ async def save_gift_duration(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ADMIN_GIFT_DURATION
 
     data = load_data()
-    data.setdefault("gift", {"type": "", "min_amount": 0, "end_time": 0, "active": False})
-    data["gift"]["end_time"] = time.time() + duration * 3600
-    data["gift"]["active"] = True
+    data.setdefault("gifts", []).append({
+        "product_name": context.user_data["gift_product_name"],
+        "threshold_amount": context.user_data["gift_threshold_amount"],
+        "end_time": time.time() + duration * 3600,
+        "active": True
+    })
     save_data(data)
 
-    await update.message.reply_text(f"✅ مدت زمان هدیه تنظیم و فعال شد!\n\n⏰ {duration} ساعت")
-    return await admin_gift_menu(update, context)
+    await update.message.reply_text(
+        f"✅ هدیه اضافه شد!\n\n"
+        f"محصول: {context.user_data['gift_product_name']}\n"
+        f"حداقل خرید: {format_price(context.user_data['gift_threshold_amount'])}\n"
+        f"مدت: {duration} ساعت"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("🎁 مدیریت هدیه‌ها", callback_data="admin_gifts")],
+        [InlineKeyboardButton("⚙️ پنل مدیریت", callback_data="admin")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
+    return MAIN_MENU
+
+async def admin_toggle_gift(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        idx = int(query.data.replace("gift_toggle_", ""))
+    except ValueError:
+        await query.edit_message_text("❌ خطا!")
+        return MAIN_MENU
+
+    data = load_data()
+    gifts = data.get("gifts", [])
+    if 0 <= idx < len(gifts):
+        gifts[idx]["active"] = not gifts[idx].get("active", False)
+        save_data(data)
+
+    return await admin_gifts_menu(update, context)
+
+async def admin_delete_gift(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        idx = int(query.data.replace("gift_delete_", ""))
+    except ValueError:
+        await query.edit_message_text("❌ خطا!")
+        return MAIN_MENU
+
+    data = load_data()
+    gifts = data.get("gifts", [])
+    if 0 <= idx < len(gifts):
+        del gifts[idx]
+        save_data(data)
+
+    return await admin_gifts_menu(update, context)
 
 # ============ مدیریت دسته بندی ها ============
 async def admin_cats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1602,7 +1470,6 @@ async def admin_cats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"{i+1}. {icon} {cat_name} ({product_count} محصول)\n"
         cat_id = get_cat_id(cat_name)
         
-        # ردیف اول: نام دسته
         keyboard.append([
             InlineKeyboardButton(f"{icon} {cat_name}", callback_data=f"catmnu_{cat_id}")
         ])
@@ -1644,7 +1511,6 @@ async def admin_cat_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🎨 ویرایش استیکر", callback_data=f"eci_{cat_id}")],
     ]
     
-    # دکمه های جابجایی ترتیب
     move_row = []
     if idx > 0:
         move_row.append(InlineKeyboardButton("⬆️ بالا", callback_data=f"cmup_{cat_id}"))
@@ -1660,7 +1526,6 @@ async def admin_cat_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# جابجایی به بالا
 async def admin_cat_move_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1682,10 +1547,8 @@ async def admin_cat_move_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data["cat_order"] = ordered_cats
             save_data(data)
     
-    # برگشت به منوی دسته
     return await admin_cat_menu(update, context)
 
-# جابجایی به پایین
 async def admin_cat_move_down(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1709,7 +1572,6 @@ async def admin_cat_move_down(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     return await admin_cat_menu(update, context)
 
-# ویرایش نام دسته
 async def admin_edit_cat_name_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1745,9 +1607,7 @@ async def save_edited_cat_name(update: Update, context: ContextTypes.DEFAULT_TYP
         return MAIN_MENU
     
     if old_name in data.get("categories", {}):
-        # جابجایی محصولات به نام جدید
         products = data["categories"][old_name]
-        # حفظ ترتیب
         new_categories = OrderedDict()
         for k, v in data["categories"].items():
             if k == old_name:
@@ -1756,13 +1616,11 @@ async def save_edited_cat_name(update: Update, context: ContextTypes.DEFAULT_TYP
                 new_categories[k] = v
         data["categories"] = dict(new_categories)
         
-        # آپدیت آیکون
         if "cat_icons" in data and old_name in data["cat_icons"]:
             icon = data["cat_icons"][old_name]
             del data["cat_icons"][old_name]
             data["cat_icons"][new_name] = icon
         
-        # آپدیت ترتیب
         if "cat_order" in data:
             data["cat_order"] = [new_name if x == old_name else x for x in data["cat_order"]]
         
@@ -1782,7 +1640,6 @@ async def save_edited_cat_name(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
     return MAIN_MENU
 
-# ویرایش استیکر دسته
 async def admin_edit_cat_icon_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1838,7 +1695,6 @@ async def save_edited_cat_icon(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
     return MAIN_MENU
 
-# افزودن دسته جدید
 async def admin_add_cat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1904,7 +1760,6 @@ async def save_new_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("چه کاری انجام بدم؟", reply_markup=reply_markup)
     return MAIN_MENU
 
-# حذف دسته
 async def admin_delete_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1931,7 +1786,6 @@ async def admin_delete_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("❌ خیر، انصراف", callback_data="admin_cats")],
         ]
     else:
-        # اگر دسته خالی است، مستقیم حذف کن
         return await admin_confirm_delete_cat(update, context)
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2794,7 +2648,6 @@ async def save_chat_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_link = update.message.text.strip()
     data = load_data()
 
-    # اگر فقط عدد وارد شد، آن را به لینک کاربر تلگرام تبدیل کن
     if new_link.isdigit():
         new_link = f"tg://user?id={new_link}"
 
@@ -2829,7 +2682,9 @@ async def admin_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             discount_text = ""
             if order.get("discount"):
                 discount_text = f"💰 تخفیف: {format_price(order['discount'])}\n"
-            gift_text = order.get("gift", "")
+            gift_text = ""
+            if order.get("gifts"):
+                gift_text = f"🎁 هدایا: {', '.join(order['gifts'])}\n"
             text += (
                 f"━━━━━━━━━━━━\n"
                 f"# {order['order_id']}\n"
@@ -2917,7 +2772,7 @@ def main():
                 CallbackQueryHandler(browse_products, pattern="^browse$"),
                 CallbackQueryHandler(show_category, pattern="^cat_"),
                 CallbackQueryHandler(view_product, pattern="^product_"),
-                CallbackQueryHandler(add_to_cart, pattern="^qty_"),
+                CallbackQueryHandler(add_to_cart, pattern="^qty_\d+$"),
                 CallbackQueryHandler(custom_qty_start, pattern="^qty_custom$"),
                 CallbackQueryHandler(show_cart, pattern="^cart$"),
                 CallbackQueryHandler(clear_cart, pattern="^clear_cart$"),
@@ -2959,21 +2814,16 @@ def main():
                 CallbackQueryHandler(admin_admins, pattern="^admin_admins$"),
                 CallbackQueryHandler(admin_add_admin_start, pattern="^addadmin_new$"),
                 CallbackQueryHandler(admin_remove_admin, pattern="^rmadmin_"),
-                CallbackQueryHandler(admin_promotions_menu, pattern="^admin_promotions$"),
+                CallbackQueryHandler(admin_discounts_menu, pattern="^admin_discounts$"),
                 CallbackQueryHandler(admin_promo_add_threshold_start, pattern="^promo_add_threshold$"),
-                CallbackQueryHandler(admin_promo_add_product_start, pattern="^promo_add_product$"),
-                CallbackQueryHandler(admin_promo_add_product_start, pattern="^promo_add_product$"),
-                CallbackQueryHandler(admin_product_discount_category, pattern="^pd_cat_"),
-                CallbackQueryHandler(admin_product_discount_select, pattern="^pd_prod_"),
-                CallbackQueryHandler(admin_toggle_threshold, pattern="^pth_toggle_"),
-                CallbackQueryHandler(admin_delete_threshold, pattern="^pth_delete_"),
-                CallbackQueryHandler(admin_toggle_product_discount, pattern="^ppd_toggle_"),
-                CallbackQueryHandler(admin_delete_product_discount, pattern="^ppd_delete_"),
-                CallbackQueryHandler(admin_gift_menu, pattern="^promo_gift$"),
-                CallbackQueryHandler(admin_gift_toggle, pattern="^gift_toggle$"),
-                CallbackQueryHandler(admin_gift_set_type_start, pattern="^gift_set_type$"),
-                CallbackQueryHandler(admin_gift_set_min_start, pattern="^gift_set_min$"),
-                CallbackQueryHandler(admin_gift_set_duration_start, pattern="^gift_set_duration$"),
+                CallbackQueryHandler(admin_toggle_threshold, pattern="^td_toggle_"),
+                CallbackQueryHandler(admin_delete_threshold, pattern="^td_delete_"),
+                CallbackQueryHandler(admin_gifts_menu, pattern="^admin_gifts$"),
+                CallbackQueryHandler(admin_gift_add_start, pattern="^gift_add$"),
+                CallbackQueryHandler(admin_gift_category, pattern="^gift_cat_"),
+                CallbackQueryHandler(admin_gift_select_product, pattern="^gift_prod_"),
+                CallbackQueryHandler(admin_toggle_gift, pattern="^gift_toggle_"),
+                CallbackQueryHandler(admin_delete_gift, pattern="^gift_delete_"),
                 CallbackQueryHandler(back_to_main, pattern="^back_main$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message),
             ],
@@ -3010,9 +2860,6 @@ def main():
             ADMIN_PROMO_THRESHOLD_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_promo_threshold_amount)],
             ADMIN_PROMO_THRESHOLD_PERCENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_promo_threshold_percent)],
             ADMIN_PROMO_THRESHOLD_DURATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_promo_threshold_duration)],
-            ADMIN_PRODUCT_DISCOUNT_PERCENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_product_discount_percent)],
-            ADMIN_PRODUCT_DISCOUNT_DURATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_product_discount_duration)],
-            ADMIN_GIFT_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_gift_type)],
             ADMIN_GIFT_MIN_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_gift_min_amount)],
             ADMIN_GIFT_DURATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_gift_duration)],
         },
