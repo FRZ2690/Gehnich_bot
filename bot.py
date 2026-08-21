@@ -92,7 +92,7 @@ def run_health_server():
     ADMIN_PROMO_THRESHOLD_DURATION,
     ADMIN_GIFT_MIN_AMOUNT,
     ADMIN_GIFT_DURATION
-) = range(31)
+) = range(30)   # ← اصلاح شد: از 31 به 30
 
 # ============ کش ============
 _id_to_name_cache = {}
@@ -338,20 +338,12 @@ def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            # migrate old keys
             if "promotions" in data and "threshold_discounts" not in data:
                 data["threshold_discounts"] = data.pop("promotions")
             if "threshold_discounts" not in data:
                 data["threshold_discounts"] = []
             if "gifts" not in data:
                 data["gifts"] = []
-            if "product_discounts" in data:
-                # ignore old product discounts
-                pass
-            if "gift" in data:
-                # ignore old single gift
-                pass
-
             if "contact_info" not in data:
                 data["contact_info"] = {
                     "phone": "09158483757",
@@ -431,7 +423,6 @@ def get_active_threshold_discounts(data, total_amount, current_time):
             if total_amount > promo.get("threshold_amount", 0):
                 active.append(promo)
     if active:
-        # بالاترین آستانه را انتخاب کن
         return max(active, key=lambda x: x["threshold_amount"])
     return None
 
@@ -1166,7 +1157,6 @@ async def admin_discounts_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_text(text, reply_markup=reply_markup)
     return MAIN_MENU
 
-# ---------- تخفیف مبلغی ----------
 async def admin_promo_add_threshold_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
