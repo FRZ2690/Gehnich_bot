@@ -92,7 +92,7 @@ def run_health_server():
     ADMIN_PROMO_THRESHOLD_DURATION,
     ADMIN_GIFT_MIN_AMOUNT,
     ADMIN_GIFT_DURATION
-) = range(30)   # ← اصلاح شد: از 31 به 30
+) = range(30)
 
 # ============ کش ============
 _id_to_name_cache = {}
@@ -517,25 +517,66 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cat_id = query.data.replace("cat_", "")
     
-    if cat_id == "all":
+    # حالت همه محصولات با صفحه‌بندی
+    if cat_id == "all" or cat_id.startswith("all_"):
+        page = 0
+        if cat_id != "all":
+            try:
+                page = int(cat_id.split("_")[-1])
+            except ValueError:
+                page = 0
+        
         data = load_data()
-        all_products = get_all_products(data)
-        icon = "🌟"
-        available_products = [(name, info) for name, info in all_products.items() if info["available"]]
-        total_count = len(available_products)
-        display_products = available_products[:50]
-        text = f"🌟 همه محصولات\n\nنمایش {len(display_products)} محصول از {total_count}:\n(برای دیدن بقیه از جستجو استفاده کنید)\n\n"
+        ordered_cats = get_ordered_categories(data)
+        
+        # ساخت لیست کامل محصولات بر اساس ترتیب دسته‌ها
+        all_items = []
+        for cat_name in ordered_cats:
+            for name, info in data["categories"][cat_name].items():
+                if info["available"]:
+                    all_items.append((name, info, cat_name))
+        
+        total_count = len(all_items)
+        per_page = 50
+        total_pages = (total_count + per_page - 1) // per_page
+        if page >= total_pages and total_pages > 0:
+            page = total_pages - 1
+        if page < 0:
+            page = 0
+        
+        start_idx = page * per_page
+        end_idx = min(start_idx + per_page, total_count)
+        page_items = all_items[start_idx:end_idx]
+        
+        context.user_data["last_category"] = "all"
+        context.user_data["last_all_page"] = page
+        
+        text = (
+            f"🌟 همه محصولات\n\n"
+            f"صفحه {page + 1} از {total_pages}\n"
+            f"نمایش {start_idx + 1} تا {end_idx} از {total_count} محصول\n\n"
+            f"برای سفارش روی محصول بزنید:"
+        )
         keyboard = []
-        for name, info in display_products:
+        for name, info, cat_name in page_items:
             prod_id = get_prod_id(name)
-            cat_icon = get_cat_icon(data, info.get("category", ""))
+            cat_icon = get_cat_icon(data, cat_name)
             keyboard.append([
                 InlineKeyboardButton(
                     f"{cat_icon} {shorten_name(name)} - {format_price(info['price'])}",
                     callback_data=f"product_{prod_id}"
                 )
             ])
-        context.user_data["last_category"] = "all"
+        
+        # دکمه‌های صفحه‌بندی
+        nav_row = []
+        if page > 0:
+            nav_row.append(InlineKeyboardButton("⬅️ قبلی", callback_data=f"cat_all_{page - 1}"))
+        if page < total_pages - 1:
+            nav_row.append(InlineKeyboardButton("بعدی ➡️", callback_data=f"cat_all_{page + 1}"))
+        if nav_row:
+            keyboard.append(nav_row)
+        
         keyboard.append([InlineKeyboardButton("🛍 سبد خرید", callback_data="cart")])
         keyboard.append([InlineKeyboardButton("🔙 بازگشت به دسته ها", callback_data="browse")])
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -604,8 +645,15 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"تعداد مورد نظر را انتخاب کنید:"
     )
 
-    last_cat = context.user_data.get("last_category", get_cat_id(cat_name))
-    back_callback = f"cat_{last_cat}" if last_cat != "all" else "cat_all"
+    # دکمه بازگشت به دسته یا صفحه مناسب
+    last_cat = context.user_data.get("last_category", "")
+    if last_cat == "all":
+        page = context.user_data.get("last_all_page", 0)
+        back_callback = f"cat_all_{page}" if page > 0 else "cat_all"
+    elif last_cat:
+        back_callback = f"cat_{last_cat}"
+    else:
+        back_callback = f"cat_{get_cat_id(cat_name)}"
 
     keyboard = [
         [
@@ -1919,7 +1967,7 @@ async def admin_remove_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
     admin_id_to_remove = int(query.data.replace("rmadmin_", ""))
     
     if admin_id_to_remove == SUPER_ADMIN_ID:
-        await query.edit_message_text("❌ نمی توانید مدیر ارشد را حذف کنید!")
+        await query.edit_message_text("❌ نمی کنید مدیر ارشد را حذف کنید!")
         return MAIN_MENU
 
     data = load_data()
